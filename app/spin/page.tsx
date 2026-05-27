@@ -13,7 +13,6 @@ import {
   Trophy,
   Timer,
 } from "lucide-react";
-
 export default function SpinningWheelPage() {
   const [wallet, setWallet] =
     useState(0);
@@ -32,15 +31,35 @@ export default function SpinningWheelPage() {
 
   // Load User
   useEffect(() => {
-    const user =
-      localStorage.getItem("user");
 
-    if (user) {
-      const parsed = JSON.parse(user);
+  const loadWallet =
+    async () => {
 
-      setWallet(parsed.wallet);
-    }
-  }, []);
+      const user =
+        localStorage.getItem(
+          "user"
+        );
+
+      if (user) {
+
+        const parsed =
+          JSON.parse(user);
+
+        setTimeout(() => {
+
+          setWallet(
+            parsed.wallet
+          );
+
+        }, 0);
+
+      }
+
+    };
+
+  loadWallet();
+
+}, []);
 
   // Timer
   useEffect(() => {
