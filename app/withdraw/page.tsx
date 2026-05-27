@@ -31,14 +31,36 @@ export default function WithdrawPage() {
   );
 
   useEffect(() => {
-    const storedUser = localStorage.getItem(
-      "user"
-    );
+
+  const loadUser = async () => {
+
+    const storedUser =
+      localStorage.getItem(
+        "user"
+      );
 
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+
+      const parsedUser =
+        JSON.parse(
+          storedUser
+        );
+
+      setTimeout(() => {
+
+        setUser(
+          parsedUser
+        );
+
+      }, 0);
+
     }
-  }, []);
+
+  };
+
+  loadUser();
+
+}, []);
 
   const handleWithdraw = async () => {
   try {
@@ -80,7 +102,7 @@ export default function WithdrawPage() {
     setAmount("");
 
     setUpi("");
-  } catch (error) {
+  } catch (_error) {
     toast.error("Withdraw failed");
   }
 };
