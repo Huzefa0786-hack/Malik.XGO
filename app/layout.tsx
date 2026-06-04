@@ -1,6 +1,7 @@
-export const metadata = {
-  title: "MATKA.KING",
-};
+import "./globals.css";
+import {
+  WalletProvider,
+} from "./context/WalletContext";
 
 export default function RootLayout({
   children,
@@ -9,7 +10,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <WalletProvider>
+          {children}
+        </WalletProvider>
+      </body>
     </html>
   );
 }

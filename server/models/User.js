@@ -1,36 +1,19 @@
 import mongoose from "mongoose";
 
-const userSchema =
-  new mongoose.Schema(
-    {
-      uid: {
-  type: String,
-  unique: true,
-},
-      banned: {
-  type: Boolean,
-  default: false,
-},
-      name: String,
+const UserSchema = new mongoose.Schema({
+  name: String,
+  wallet: {
+    type: Number,
+    default: 700,
+  },
+  isBanned: {
+    type: Boolean,
+    default: false,
+  },
+  role: {
+    type: String,
+    default: "user", // user | admin
+  },
+});
 
-      email: {
-        type: String,
-        unique: true,
-      },
-
-      password: String,
-
-      wallet: {
-        type: Number,
-        default: 1000,
-      },
-    },
-    {
-      timestamps: true,
-    }
-  );
-
-export default mongoose.model(
-  "User",
-  userSchema
-);
+export default mongoose.models.User || mongoose.model("User", UserSchema);

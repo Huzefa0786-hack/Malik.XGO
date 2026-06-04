@@ -4,8 +4,9 @@ import {
   useEffect,
   useState,
 } from "react";
-
+import axios from "axios";
 import Link from "next/link";
+import { useWallet } from "../context/WalletContext";
 
 import {
   ArrowLeft,
@@ -20,9 +21,6 @@ export default function SkyGame() {
   const [flying, setFlying] =
     useState(false);
 
-  const [wallet, setWallet] =
-    useState(0);
-
   const [betAmount, setBetAmount] =
     useState("");
 
@@ -35,17 +33,29 @@ export default function SkyGame() {
   const [crashed, setCrashed] =
     useState(false);
 
+    const {
+  wallet,
+  setWallet,
+  loadWallet,
+} = useWallet();
+
+const [loadingWallet, setLoadingWallet] =
+  useState(true);
+
   // Load Wallet
-  useEffect(() => {
-    const user =
-      localStorage.getItem("user");
-
-    if (user) {
-      const parsed = JSON.parse(user);
-
-      setWallet(parsed.wallet);
+useEffect(() => {
+  const fetchWallet = async () => {
+    try {
+      await loadWallet();
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setLoadingWallet(false);
     }
-  }, []);
+  };
+
+  fetchWallet();
+}, [loadWallet]);
 
   // Flying Logic
   useEffect(() => {
@@ -87,62 +97,49 @@ export default function SkyGame() {
   }, [flying, cashedOut]);
 
   // Start
-  const startFlying = () => {
-    if (!betAmount) {
-      return alert(
-        "Enter bet amount"
-      );
-    }
+  const startFlying = async () => {
+  if (!betAmount) {
+    alert("Enter bet amount");
+    return;
+  }
 
-    if (
-      Number(betAmount) >
-      wallet
-    ) {
-      return alert(
-        "Low balance"
-      );
-    }
+  if (Number(betAmount) > wallet) {
+    alert("Low balance");
+    return;
+  }
 
-    const updatedWallet =
-      wallet -
-      Number(betAmount);
+  try {
+    const token =
+      localStorage.getItem("token");
 
-    setWallet(updatedWallet);
+    const res = await axios.put(
+      "http://localhost:5000/api/wallet/update",
+      {
+        amount: Number(betAmount),
+        type: "remove",
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
-    const user =
-      localStorage.getItem("user");
-
-    if (user) {
-      const parsed = JSON.parse(user);
-
-      parsed.wallet =
-        updatedWallet;
-
-      localStorage.setItem(
-        "user",
-        JSON.stringify(parsed)
-      );
-
-      window.dispatchEvent(
-        new Event(
-          "walletUpdated"
-        )
-      );
-    }
+    setWallet(res.data.wallet);
 
     setPlane(1);
-
     setFlying(true);
-
     setCrashed(false);
-
     setCashedOut(false);
-
     setLastWin(0);
-  };
+
+  } catch (error) {
+    console.log(error);
+  }
+};
 
   // Cashout
-  const cashout = () => {
+const cashout = async () => {
     if (
       !flying ||
       cashedOut
@@ -150,38 +147,50 @@ export default function SkyGame() {
       return;
 
     const win =
-      Number(betAmount) *
-      plane;
+  Number(betAmount) * plane;
 
-    const updatedWallet =
-      Number(
-        (
-          wallet + win
-        ).toFixed(2)
-      );
+const token =
+  localStorage.getItem("token");
 
-    setWallet(updatedWallet);
+const cashout = async () => {
+  if (!flying || cashedOut)
+    return;
 
-    const user =
-      localStorage.getItem("user");
+  try {
+    const win =
+      Number(betAmount) * plane;
 
-    if (user) {
-      const parsed = JSON.parse(user);
+    const token =
+      localStorage.getItem("token");
 
-      parsed.wallet =
-        updatedWallet;
+    const res = await axios.put(
+      "http://localhost:5000/api/wallet/update",
+      {
+        amount: win,
+        type: "add",
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
-      localStorage.setItem(
-        "user",
-        JSON.stringify(parsed)
-      );
+    setWallet(res.data.wallet);
 
-      window.dispatchEvent(
-        new Event(
-          "walletUpdated"
-        )
-      );
-    }
+    setLastWin(
+      Number(win.toFixed(2))
+    );
+
+    setCashedOut(true);
+
+    setFlying(false);
+
+  } catch (error) {
+    console.log(error);
+    alert("Cashout failed");
+  }
+};
 
     setLastWin(
       Number(

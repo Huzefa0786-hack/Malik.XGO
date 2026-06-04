@@ -1,11 +1,12 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-} from "react";
-
+import { useEffect, useState } from "react";
 import axios from "axios";
+import Link from "next/link";
+
+import {
+  useWallet,
+} from "../context/WalletContext";
 
 type UserType = {
   _id: string;
@@ -28,6 +29,7 @@ type WithdrawType = {
 };
 
 export default function AdminPage() {
+
 
   const [section, setSection] =
     useState(
@@ -52,8 +54,8 @@ export default function AdminPage() {
   const [search, setSearch] =
     useState("");
 
-  const [walletAmount, setWalletAmount] =
-    useState("");
+  const [walletInputs, setWalletInputs] =
+  useState<Record<string, string>>({});
 
     const [gameStatus, setGameStatus] =
   useState("RUNNING");
@@ -205,6 +207,20 @@ const [activity, setActivity] =
     );
 
 }, []);
+ <Link
+  href="/"
+  className="fixed top-4 left-4 z-50 px-4 py-2 bg-black/70 border border-white/10 backdrop-blur-xl rounded-xl hover:bg-white/10 transition"
+>
+  ← Back
+</Link>
+
+useEffect(() => {
+  const interval = setInterval(() => {
+    loadData();
+  }, 5000);
+
+  return () => clearInterval(interval);
+}, []);
 
   useEffect(() => {
 
@@ -233,63 +249,46 @@ const [activity, setActivity] =
     );
 
 }, []);
+ <Link
+  href="/"
+  className="fixed top-4 left-4 z-50 px-4 py-2 bg-black/70 border border-white/10 backdrop-blur-xl rounded-xl hover:bg-white/10 transition"
+>
+  ← Back
+</Link>
 
-  useEffect(() => {
+ useEffect(() => {
+  loadData();
 
+  const interval = setInterval(() => {
     loadData();
+  }, 5000);
 
-  }, []);
+  return () => clearInterval(interval);
 
- const loadData =
-  async () => {
+}, []);
 
-    try {
+const loadData = async () => {
+  try {
+    const [
+      usersRes,
+      depRes,
+      wdRes,
+      controlRes,
+    ] = await Promise.all([
+      axios.get("http://localhost:5000/api/auth/users"),
+      axios.get("http://localhost:5000/api/deposit"),
+      axios.get("http://localhost:5000/api/withdraw"),
+      axios.get("http://localhost:5000/api/control"),
+    ]);
 
-      // Users
-      const usersRes =
-        await axios.get(
-          "http://localhost:5000/api/auth/users"
-        );
+    setUsers(usersRes.data);
+    setDeposits(depRes.data);
+    setWithdraws(wdRes.data);
+    setControl(controlRes.data);
 
-      setUsers(
-        usersRes.data
-      );
-
-      // Deposits
-      const depRes =
-        await axios.get(
-          "http://localhost:5000/api/deposit"
-        );
-
-      setDeposits(
-        depRes.data
-      );
-
-      // Withdraws
-      const wdRes =
-        await axios.get(
-          "http://localhost:5000/api/withdraw"
-        );
-
-      setWithdraws(
-        wdRes.data
-      );
-
-      // Game Control
-      const controlRes =
-        await axios.get(
-          "http://localhost:5000/api/control"
-        );
-
-      setControl(
-        controlRes.data
-      );
-
-    } catch (error) {
-
-      console.log(error);
-
-    }
+  } catch (err) {
+    console.log(err);
+  }
 };
   // Approve Deposit
   const approveDeposit =
@@ -498,7 +497,25 @@ const updateWallet =
   return (
 
     <main className="min-h-screen bg-black text-white flex">
-
+<Link
+  href="/"
+  className="
+  fixed
+  top-4
+  left-4
+  z-50
+  px-4
+  py-2
+  bg-zinc-900
+  border
+  border-zinc-800
+  rounded-xl
+  hover:bg-zinc-800
+  transition
+  "
+>
+  ← Back
+</Link>
       {/* Sidebar */}
       <div className="w-72 bg-zinc-950 border-r border-zinc-800 p-6">
 
@@ -616,7 +633,16 @@ const updateWallet =
 
     </div>
 
-    <div className=" grid-cols-1 md:grid-cols-6 gap-6 mb-10">
+    <div
+className="
+grid
+grid-cols-1
+md:grid-cols-2
+xl:grid-cols-4
+gap-6
+mb-10
+"
+>
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
 
@@ -925,7 +951,13 @@ const updateWallet =
   }
   className="bg-black border border-zinc-700 px-4 rounded-xl w-40"
 />
-
+<input
+  type="text"
+  placeholder="Search User"
+  value={search}
+  onChange={(e) => setSearch(e.target.value)}
+  className="bg-black border border-zinc-700 px-4 py-3 rounded-xl"
+/>
             </div>
 
             <div className="space-y-5">
@@ -1225,30 +1257,38 @@ const updateWallet =
     }`}
   >
     {num}
-  </button>
+ <button
+  onClick={() =>
+    saveControl({
+      rtp: 60,
+    })
+  }
+  className="bg-green-600 h-16 rounded-2xl font-black"
+>
+  LOW RTP
+</button>
 
-))}
+<button
+  onClick={() =>
+    saveControl({
+      rtp: 75,
+    })
+  }
+  className="bg-yellow-500 h-16 rounded-2xl font-black"
+>
+  MEDIUM RTP
+</button>
 
-        </div>
-
-        <div className="grid grid-cols-3 gap-4 mt-8">
-
-          <button className="bg-green-600 h-16 rounded-2xl font-black">
-            LOW RTP
-          </button>
-
-          <button className="bg-yellow-500 h-16 rounded-2xl font-black">
-            MEDIUM RTP
-          </button>
-
-          <button className="bg-red-600 h-16 rounded-2xl font-black">
-            HIGH RTP
-          </button>
-
-        </div>
-
-      </div>
-
+<button
+  onClick={() =>
+    saveControl({
+      rtp: 90,
+    })
+  }
+  className="bg-red-600 h-16 rounded-2xl font-black"
+>
+  HIGH RTP
+</button>
       {/* Spin */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
 

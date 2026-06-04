@@ -107,8 +107,10 @@ export default function WithdrawPage() {
   }
 };
   return (
-    <main className="min-h-screen bg-black text-white px-6 py-10">
-      <div className="max-w-6xl mx-auto">
+
+  <main className="min-h-screen bg-black text-white overflow-x-hidden">
+      <div className="container mx-auto px-4 py-10">
+
         {/* Back */}
         <Link
           href="/"
@@ -131,7 +133,7 @@ export default function WithdrawPage() {
         </div>
 
         {/* Grid */}
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-14">
           {/* Left */}
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8">
             {/* Top */}
@@ -214,7 +216,7 @@ export default function WithdrawPage() {
             </div>
 
             {/* Quick Amounts */}
-            <div className="grid grid-cols-4 gap-3 mb-8">
+            <div className="d grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-10">
               {[100, 500, 1000, 5000].map(
                 (amt) => (
                   <button

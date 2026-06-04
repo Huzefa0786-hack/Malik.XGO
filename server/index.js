@@ -3,109 +3,57 @@ import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 
-/* ROUTES */
 import authRoutes from "./routes/auth.js";
+import walletRoutes from "./routes/wallet.js";
 import depositRoutes from "./routes/deposit.js";
 import withdrawRoutes from "./routes/withdraw.js";
-import walletRoutes from "./routes/wallet.js";
-import controlRoutes from "./routes/control.js";
 import betRoutes from "./routes/bet.js";
-import transactionRoutes from "./routes/transaction.js";
 
 dotenv.config();
-
+require(
+ "./jobs/colorEngine.js"
+);
 const app = express();
 
-/* MIDDLEWARE */
 app.use(cors());
 
 app.use(express.json());
 
-/* API ROUTES */
-app.use(
-  "/api/auth",
-  authRoutes
-);
+app.use("/api/auth", authRoutes);
 
-app.use(
-  "/api/deposit",
-  depositRoutes
-);
+app.use("/api/wallet", walletRoutes);
 
-app.use(
-  "/api/withdraw",
-  withdrawRoutes
-);
+app.use("/api/deposit", depositRoutes);
 
-app.use(
-  "/api/wallet",
-  walletRoutes
-);
+app.use("/api/withdraw", withdrawRoutes);
 
-app.use(
-  "/api/control",
-  controlRoutes
-);
+app.use("/api/bet", betRoutes);
 
-app.use(
-  "/api/bet",
-  betRoutes
-);
+app.get("/", (req, res) => {
 
-app.use(
-  "/api/transaction",
-  transactionRoutes
-);
+  res.send("MALIK SERVER RUNNING");
 
-/* ROOT */
-app.get(
-  "/",
-  (
-    req,
-    res
-  ) => {
+});
 
-    res.send(
-      "API RUNNING"
-    );
-
-  }
-);
-
-/* DATABASE */
 mongoose
-  .connect(
-    process.env.MONGO_URI
-  )
+  .connect(process.env.MONGO_URI)
   .then(() => {
 
     console.log(
       "MongoDB Connected"
     );
 
-  })
-  .catch(
-    (err) => {
+    app.listen(5000, () => {
 
       console.log(
-        err
+        "Server running on port 5000"
       );
 
-    }
-  );
+    });
 
-/* SERVER */
-const PORT =
-  process.env.PORT ||
-  5000;
+  })
+  .catch((err) => {
 
-app.listen(
-  PORT,
-  () => {
+    console.log(err);
 
-    console.log(
-      `Server running on port ${PORT}`
-    );
-
-  }
-);
+  });

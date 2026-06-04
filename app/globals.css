@@ -2,8 +2,20 @@
 
 html,
 body {
-  background-color: black;
-  color: white;
   margin: 0;
   padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background: #000;
+  color: white;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
 }
