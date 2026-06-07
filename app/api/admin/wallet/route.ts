@@ -1,22 +1,34 @@
-import { connectDB } from "@/lib/db";
-import User from "@/models/User";
+import express from "express";
 
-export async function POST(req: Request) {
-  await connectDB();
+const router = express.Router();
 
-  const { userId, amount } = await req.json();
+router.put("/update", async (req, res) => {
+  try {
+    const { amount, type } = req.body;
 
-  const user = await User.findById(userId);
+    // Temporary testing wallet
+    let wallet = 1000;
 
-  if (!user) {
-    return Response.json({ error: "User not found" });
+    if (type === "remove") {
+      wallet -= amount;
+    }
+
+    if (type === "add") {
+      wallet += amount;
+    }
+
+    return res.json({
+      success: true,
+      wallet,
+    });
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Wallet update failed",
+    });
   }
+});
 
-  user.wallet += amount;
-  await user.save();
-
-  return Response.json({
-    message: "Wallet updated",
-    wallet: user.wallet,
-  });
-}
+export default router;

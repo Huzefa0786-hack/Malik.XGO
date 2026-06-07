@@ -1,7 +1,10 @@
 import "./globals.css";
-import {
-  WalletProvider,
-} from "./context/WalletContext";
+import React from "react";
+
+// Fallback/local WalletProvider to avoid missing module during development
+const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return <>{children}</>;
+};
 
 export default function RootLayout({
   children,

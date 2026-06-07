@@ -7,149 +7,108 @@ import axios from "axios";
 export default function LoginPage() {
   const router = useRouter();
 
-const [username, setUsername] =
-  useState("");
-const handleLogin = async (
-  e: any
-) => {
+  const [email, setEmail] = useState("");    // Changed from username to email
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  e.preventDefault();
+  const login = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email || !password) {
+      return alert("Fill all fields");
+    }
 
-  // GET USERS
-  const users =
-    JSON.parse(
-      localStorage.getItem(
-        "users"
-      ) || "[]"
-    );
-
-  // FIND USER
-  const foundUser =
-    users.find(
-      (u: any) =>
-
-        u.username ===
-          username &&
-
-        u.password ===
-          password
-
-    );
-
-  // NOT FOUND
-  if (!foundUser) {
-
-    return alert(
-      "Invalid Login"
-    );
-
-  }
-
-  // SAVE LOGIN
-  localStorage.setItem(
-    "user",
-    JSON.stringify(
-      foundUser
-    )
-  );
-
-  localStorage.setItem(
-    "loggedIn",
-    "true"
-  );
-
-  alert(
-    "Login Success"
-  );
-
-  // REDIRECT
-  window.location.href =
-    "/";
-
-};
-  const [email, setEmail] =
-    useState("");
-
-  const [password, setPassword] =
-    useState("");
-
-  const login = async () => {
     try {
+      setLoading(true);
+
       const res = await axios.post(
         "http://localhost:5000/api/auth/login",
         {
-          email,
+          email,     // Send email (not username)
           password,
         }
       );
+      
+      console.log(res.data);
 
-      localStorage.setItem(
-        "token",
-        res.data.token
-      );
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+      localStorage.setItem("loggedIn", "true");
 
-      localStorage.setItem(
-        "user",
-        JSON.stringify(res.data.user)
-      );
+      alert("Login Successful");
+      router.push("/");
 
-      alert("Login successful");
-
-      router.push("/numcards");
     } catch (err: any) {
       alert(
         err?.response?.data?.error ||
-          "Login failed"
+        err?.response?.data?.message ||
+        "Login Failed"
       );
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <main className="min-h-screen bg-black flex items-center justify-center px-6">
-
-      <div className="w-full max-w-md bg-gray-950 border border-gray-800 rounded-3xl p-8">
-
-        <h1 className="text-4xl font-black text-white mb-8 text-center">
-          Login
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
+        <h1 className="text-4xl font-black text-green-400 text-center mb-8">
+          MATKA.KING LOGIN
         </h1>
 
-        <div className="space-y-5">
+        <form onSubmit={login}>
+          <div className="space-y-4">
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-white focus:border-green-500 outline-none transition-colors"
+              required
+            />
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) =>
-              setEmail(
-                e.target.value
-              )
-            }
-            className="w-full bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4 text-white outline-none"
-          />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-white focus:border-green-500 outline-none transition-colors"
+              required
+            />
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) =>
-              setPassword(
-                e.target.value
-              )
-            }
-            className="w-full bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4 text-white outline-none"
-          />
+            {/* Forgot Password Link */}
+            <div className="text-right">
+              <button
+                type="button"
+                onClick={() => router.push("/reset-password")}
+                className="text-sm text-green-500 hover:text-green-400 transition-colors"
+              >
+                Forgot Password?
+              </button>
+            </div>
 
-          <button
-            onClick={login}
-            className="w-full bg-green-600 hover:bg-green-500 transition rounded-2xl py-4 font-black text-xl"
-          >
-            LOGIN
-          </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-green-500 hover:bg-green-600 disabled:bg-green-800 disabled:cursor-not-allowed text-black font-black py-4 rounded-xl transition-colors"
+            >
+              {loading ? "PLEASE WAIT..." : "LOGIN"}
+            </button>
 
-        </div>
+            <p className="text-center text-gray-400 mt-4">
+              Don't have an account?
+            </p>
 
+            <button
+              type="button"
+              onClick={() => router.push("/register")}
+              className="w-full mt-2 bg-zinc-800 hover:bg-zinc-700 rounded-2xl py-4 font-bold text-white transition-colors"
+            >
+              REGISTER
+            </button>
+          </div>
+        </form>
       </div>
-
     </main>
   );
 }

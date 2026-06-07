@@ -8,11 +8,12 @@ import walletRoutes from "./routes/wallet.js";
 import depositRoutes from "./routes/deposit.js";
 import withdrawRoutes from "./routes/withdraw.js";
 import betRoutes from "./routes/bet.js";
+// import "./jobs/colorEngine.js";
 
 dotenv.config();
-require(
- "./jobs/colorEngine.js"
-);
+console.log("SERVER STARTING...");
+console.log(process.env.MONGO_URI);
+
 const app = express();
 
 app.use(cors());
@@ -35,25 +36,18 @@ app.get("/", (req, res) => {
 
 });
 
+console.log("Connecting to MongoDB...");
+
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
-
-    console.log(
-      "MongoDB Connected"
-    );
+    console.log("MongoDB Connected");
 
     app.listen(5000, () => {
-
-      console.log(
-        "Server running on port 5000"
-      );
-
+      console.log("Server running on port 5000");
     });
-
   })
   .catch((err) => {
-
-    console.log(err);
-
+    console.error("MONGO ERROR:");
+    console.error(err);
   });

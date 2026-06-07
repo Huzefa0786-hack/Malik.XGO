@@ -39,6 +39,10 @@ export default function SkyGame() {
   loadWallet,
 } = useWallet();
 
+useEffect(() => {
+  loadWallet();
+}, []);
+
 const [loadingWallet, setLoadingWallet] =
   useState(true);
 

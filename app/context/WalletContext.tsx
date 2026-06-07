@@ -1,51 +1,62 @@
 "use client";
 
-import axios from "axios";
 import {
   createContext,
   useContext,
   useState,
+  ReactNode,
 } from "react";
 
-type WalletContextType = {
+import axios from "axios";
+
+interface WalletContextType {
   wallet: number;
-  setWallet: React.Dispatch<
-    React.SetStateAction<number>
-  >;
+  setWallet: (value: number) => void;
   loadWallet: () => Promise<void>;
-};
+}
+
 const WalletContext =
-  createContext<WalletContextType | null>(
-    null
-  );
+  createContext<WalletContextType>({
+    wallet: 0,
+    setWallet: () => {},
+    loadWallet: async () => {},
+  });
 
 export function WalletProvider({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const [wallet, setWallet] =
-    useState(5000);
+    useState(0);
 
-  const loadWallet = async () => {
-    try {
-      const token =
-        localStorage.getItem("token");
+  const loadWallet =
+    async () => {
+      try {
+        const user =
+          JSON.parse(
+            localStorage.getItem(
+              "user"
+            ) || "{}"
+          );
 
-      const res = await axios.get(
-        "http://localhost:5000/api/wallet",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+        if (!user?.uid) return;
 
-      setWallet(res.data.wallet);
-    } catch (error) {
-      console.log(error);
-    }
-  };
+        const res =
+          await axios.get(
+            `http://localhost:5000/api/wallet/${user.uid}`
+          );
+
+        setWallet(
+          res.data.wallet || 0
+        );
+      } catch (error) {
+        console.log(
+          "Wallet Error:",
+          error
+        );
+      }
+    };
 
   return (
     <WalletContext.Provider
@@ -60,15 +71,7 @@ export function WalletProvider({
   );
 }
 
-export const useWallet = () => {
-  const context =
-    useContext(WalletContext);
-
-  if (!context) {
-    throw new Error(
-      "WalletProvider missing"
-    );
-  }
-
-  return context;
-};
+export const useWallet =
+  () => useContext(
+    WalletContext
+  );

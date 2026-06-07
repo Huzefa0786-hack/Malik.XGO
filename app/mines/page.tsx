@@ -25,6 +25,10 @@ export default function MinesPage() {
   loadWallet,
 } = useWallet();
 
+useEffect(() => {
+  loadWallet();
+}, []);
+
 const [loadingWallet, setLoadingWallet] =
   useState(true);
   const [betAmount, setBetAmount] = useState(100);
