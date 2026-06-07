@@ -1,28 +1,25 @@
 import mongoose from "mongoose";
 
-const betSchema = new mongoose.Schema(
-  {
-    userId: mongoose.Schema.Types.ObjectId,
+const BetSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  userName: { type: String, required: true },
+  userUid: { type: String, required: true },
+  game: { type: String, required: true },
+  betType: { type: String }, // color, number, size, etc.
+  selection: { type: String }, // selected value
+  amount: { type: Number, required: true },
+  multiplier: { type: Number, default: 1 },
+  result: { type: String },
+  isWin: { type: Boolean, default: false },
+  winAmount: { type: Number, default: 0 },
+  roundId: { type: String },
+  status: { type: String, enum: ["pending", "completed", "cancelled"], default: "pending" },
+  createdAt: { type: Date, default: Date.now }
+});
 
-    selection: String,
+// Index for faster queries
+BetSchema.index({ userId: 1, createdAt: -1 });
+BetSchema.index({ game: 1, createdAt: -1 });
 
-    amount: Number,
-
-    roundId: String,
-
-    result: String,
-
-    status: {
-      type: String,
-      default: "pending",
-    },
-
-    winAmount: {
-      type: Number,
-      default: 0,
-    },
-  },
-  { timestamps: true }
-);
-
-export default mongoose.model("Bet", betSchema);
+const Bet = mongoose.models.Bet || mongoose.model("Bet", BetSchema);
+export default Bet;

@@ -47,7 +47,7 @@ export default function LoginPage() {
     <main className="min-h-screen bg-black flex items-center justify-center px-6">
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
         <h1 className="text-4xl font-black text-green-400 text-center mb-8">
-          MATKA.KING LOGIN
+          Malik.XGO LOGIN
         </h1>
 
         <form onSubmit={handleLogin}>

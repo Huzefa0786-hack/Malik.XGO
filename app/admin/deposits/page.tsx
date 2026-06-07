@@ -90,7 +90,7 @@ export default function DepositAdmin() {
             </h1>
 
             <p className="text-zinc-500 mt-2">
-              MATKA.KING Admin
+              Malik.XGO Admin
             </p>
           </div>
         </div>

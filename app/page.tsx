@@ -117,7 +117,7 @@ export default function HomePage() {
           <div className="flex items-center gap-3">
             <Crown size={34} className="text-green-400" />
             <div>
-              <h1 className="text-2xl font-black text-green-400">MATKA.KING</h1>
+              <h1 className="text-2xl font-black text-green-400">Malik.XGO</h1>
               <p className="text-zinc-500 text-xs">Premium Gaming Platform</p>
             </div>
           </div>
@@ -128,7 +128,7 @@ export default function HomePage() {
                 onClick={() => setShowProfile(!showProfile)}
                 className="w-12 h-12 rounded-full bg-green-500 text-black font-black"
               >
-                {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                {user?.name?.charAt(0)?.toUpperCase() || "👤"}
               </button>
 
               {showProfile && (
@@ -208,7 +208,7 @@ export default function HomePage() {
 
               <h1 className="text-4xl md:text-6xl font-black leading-tight mb-4">
                 PLAY.
-                <span className="text-green-400"> WIN.</span> MATKA.👑
+                <span className="text-green-400"> WIN.</span> MALIK.XGO👑
               </h1>
 
               <p className="text-zinc-400 text-lg mb-6">
@@ -266,7 +266,7 @@ export default function HomePage() {
         <div className="bg-green-500 text-black rounded-3xl p-8 mb-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
-              <h2 className="text-3xl font-black mb-2">Download MATKA.KING App</h2>
+              <h2 className="text-3xl font-black mb-2">Download Malik.XGO App</h2>
               <p className="font-semibold">
                 Faster gameplay, instant notifications and better rewards.
               </p>
@@ -304,6 +304,21 @@ export default function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            
+            {/* COLOR TRADE */}
+<Link href="/color-trade">
+  <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden hover:border-green-500 transition-all cursor-pointer group">
+    <div className="h-40 bg-linear-to-r from-green-500 to-purple-500 flex items-center justify-center">
+      <span className="text-6xl">🔢</span>
+    </div>
+    <div className="p-6">
+      <h3 className="text-3xl font-black mb-2">Color Trade</h3>
+      <p className="text-zinc-400 mb-4">Predict colors, numbers & sizes. Win up to 9x!</p>
+      <button className="w-full bg-green-500 text-black font-black py-3 rounded-xl">PLAY NOW</button>
+    </div>
+  </div>
+</Link>
+
             {/* NUMCARDS */}
             <Link href="/numcards">
               <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden hover:border-green-500 transition-all cursor-pointer group">
@@ -344,7 +359,7 @@ export default function HomePage() {
             <Link href="/sky">
               <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden hover:border-green-500 transition-all cursor-pointer group">
                 <div className="h-40 bg-blue-500 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <span className="text-6xl">✈️</span>
+                  <span className="text-6xl">🚀</span>
                 </div>
                 <div className="p-6">
                   <h3 className="text-3xl font-black mb-2">Sky</h3>
@@ -486,7 +501,7 @@ export default function HomePage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <h2 className="text-2xl font-black text-green-400 mb-3">
-                MATKA.KING
+                Malik.XGO
               </h2>
               <p className="text-zinc-500">
                 Premium gaming platform with fast deposits, instant withdrawals
@@ -530,7 +545,7 @@ export default function HomePage() {
           </div>
 
           <div className="border-t border-zinc-800 mt-8 pt-6 text-center text-zinc-500">
-            © 2026 MATKA.KING — All Rights Reserved
+            © 2026 Malik.XGO — All Rights Reserved
           </div>
         </footer>
       </div>

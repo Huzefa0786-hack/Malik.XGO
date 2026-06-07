@@ -5,17 +5,32 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { io } from "socket.io-client";
+import BetHistory from "../components/BetHistory";
 
 import {
   ArrowLeft,
   Timer,
   Trophy,
   Wallet,
-  LogIn,
-  AlertCircle
+  History,
+  TrendingUp,
+  Award,
+  Clock,
+  RefreshCw
 } from "lucide-react";
 
 const socket = io("http://localhost:5000");
+
+interface BetHistory {
+  _id: string;
+  selection: number;
+  amount: number;
+  result: number;
+  isWin: boolean;
+  winAmount: number;
+  createdAt: string;
+  roundId: string;
+}
 
 export default function NumCardsPage() {
   const router = useRouter();
@@ -26,33 +41,32 @@ export default function NumCardsPage() {
   const [wallet, setWallet] = useState(0);
   const [lastResult, setLastResult] = useState<number | null>(null);
   const [liveBets, setLiveBets] = useState<any[]>([]);
-  const [betHistory, setBetHistory] = useState<any[]>([]);
+  const [betHistory, setBetHistory] = useState<BetHistory[]>([]);
   const [control, setControl] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [roundId, setRoundId] = useState<string>("round-1");
-  const [multiplier, setMultiplier] = useState(9);
+  const [multiplier] = useState(9);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastWin, setLastWin] = useState<number | null>(null);
+  const [totalWins, setTotalWins] = useState(0);
+  const [totalLosses, setTotalLosses] = useState(0);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  const [currentBetId, setCurrentBetId] = useState<string | null>(null);
 
-  // AUTHENTICATION CHECK - This runs first
+  // AUTHENTICATION CHECK
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem("token");
       const userData = localStorage.getItem("user");
 
-      console.log("Checking auth...", { hasToken: !!token, hasUserData: !!userData });
-
       if (!token || !userData) {
-        // Not logged in, redirect to login
-        console.log("No token or user data, redirecting to login");
-        setIsAuthenticated(false);
-        setIsLoading(false);
         router.push("/login?redirect=/numcards");
         return;
       }
 
       try {
-        // Verify token is valid by making a test request
         const response = await axios.get("http://localhost:5000/api/auth/profile", {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -62,17 +76,12 @@ export default function NumCardsPage() {
           setUser(parsedUser);
           setWallet(parsedUser.wallet || 0);
           setIsAuthenticated(true);
-          console.log("User authenticated:", parsedUser.name);
-        } else {
-          throw new Error("Invalid token");
+          fetchBetHistory(token);
         }
       } catch (error) {
         console.error("Auth verification failed:", error);
-        // Token is invalid, clear storage and redirect
         localStorage.removeItem("token");
         localStorage.removeItem("user");
-        localStorage.removeItem("loggedIn");
-        setIsAuthenticated(false);
         router.push("/login?redirect=/numcards");
       } finally {
         setIsLoading(false);
@@ -82,7 +91,25 @@ export default function NumCardsPage() {
     checkAuth();
   }, [router]);
 
-  // FETCH CONTROL SETTINGS & CURRENT ROUND (only if authenticated)
+  // Fetch bet history
+  const fetchBetHistory = async (token: string) => {
+    try {
+      const response = await axios.get("http://localhost:5000/api/bet/history?game=numcards", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.data.success) {
+        setBetHistory(response.data.bets);
+        const stats = response.data.stats;
+        setTotalWins(stats?.totalWins || 0);
+        setTotalLosses(stats?.totalLosses || 0);
+      }
+    } catch (error) {
+      console.error("Failed to fetch bet history:", error);
+    }
+  };
+
+  // FETCH CONTROL SETTINGS
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -99,48 +126,79 @@ export default function NumCardsPage() {
     };
 
     fetchControl();
-
     const interval = setInterval(fetchControl, 5000);
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
-  // SOCKET.IO EVENTS (only if authenticated)
+  // SOCKET.IO EVENTS
   useEffect(() => {
     if (!isAuthenticated || !user) return;
 
-    // Join game room
     socket.emit("join_game", "numcards");
 
     socket.on("timer_update", (value) => {
       setTimer(value);
     });
 
-    socket.on("result_update", (result) => {
+    socket.on("result_update", async (result) => {
       setLastResult(result);
       
       // Check if user's bet won
-      if (selectedNumber && result.toString() === selectedNumber && betAmount) {
+      if (currentBetId && selectedNumber && result.toString() === selectedNumber) {
         const winAmount = parseInt(betAmount) * multiplier;
-        setTimeout(() => {
-          alert(`🎉 CONGRATULATIONS! You won ₹${winAmount.toLocaleString()}! 🎉`);
-        }, 500);
+        setLastWin(winAmount);
+        
+        // Update bet result
+        const token = localStorage.getItem("token");
+        try {
+          await axios.post(
+            "http://localhost:5000/api/bet/cashout",
+            {
+              betId: currentBetId,
+              winAmount: winAmount,
+              result: result.toString(),
+              multiplier: multiplier
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          
+          // Refresh wallet and history
+          const userData = localStorage.getItem("user");
+          if (userData) {
+            const parsed = JSON.parse(userData);
+            setWallet(parsed.wallet);
+          }
+          setHistoryRefresh(prev => prev + 1);
+          setCurrentBetId(null);
+        } catch (error) {
+          console.error("Failed to update win:", error);
+        }
+      } else if (currentBetId) {
+        // Lost bet
+        const token = localStorage.getItem("token");
+        try {
+          await axios.post(
+            "http://localhost:5000/api/bet/cashout",
+            {
+              betId: currentBetId,
+              winAmount: 0,
+              result: result.toString(),
+              multiplier: 0
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setHistoryRefresh(prev => prev + 1);
+          setCurrentBetId(null);
+        } catch (error) {
+          console.error("Failed to update loss:", error);
+        }
       }
+      
+      setTimeout(() => setLastWin(null), 5000);
     });
 
     socket.on("live_bet", (bet) => {
       setLiveBets((prev) => [bet, ...prev].slice(0, 20));
-    });
-
-    socket.on("bet_result", (data) => {
-      setBetHistory((prev) => [data, ...prev].slice(0, 15));
-      
-      // Update wallet if this is user's bet
-      if (data.userId === user?._id) {
-        setWallet(data.newBalance);
-        const updatedUser = { ...user, wallet: data.newBalance };
-        localStorage.setItem("user", JSON.stringify(updatedUser));
-        setUser(updatedUser);
-      }
     });
 
     socket.on("round_start", (newRoundId) => {
@@ -148,39 +206,29 @@ export default function NumCardsPage() {
       setLastResult(null);
       setSelectedNumber(null);
       setBetAmount("");
-    });
-
-    socket.on("wallet_update", (data) => {
-      if (data.userId === user?._id) {
-        setWallet(data.newBalance);
-        const updatedUser = { ...user, wallet: data.newBalance };
-        localStorage.setItem("user", JSON.stringify(updatedUser));
-        setUser(updatedUser);
-      }
+      setCurrentBetId(null);
     });
 
     return () => {
       socket.off("timer_update");
       socket.off("result_update");
       socket.off("live_bet");
-      socket.off("bet_result");
       socket.off("round_start");
-      socket.off("wallet_update");
       socket.emit("leave_game", "numcards");
     };
-  }, [isAuthenticated, user, selectedNumber, betAmount, multiplier]);
+  }, [isAuthenticated, user, selectedNumber, betAmount, multiplier, currentBetId]);
 
-  // PLACE BET (only if authenticated)
+  // PLACE BET
   const placeBet = async () => {
-    // Double check authentication
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("Please login to place bets");
-      router.push("/login?redirect=/numcards");
-      return;
-    }
-
     try {
+      const token = localStorage.getItem("token");
+      
+      if (!token) {
+        alert("Please login to place bets");
+        router.push("/login?redirect=/numcards");
+        return;
+      }
+
       if (!selectedNumber) {
         return alert("❌ Please select a number");
       }
@@ -197,106 +245,60 @@ export default function NumCardsPage() {
         return alert("❌ Betting is currently paused");
       }
 
-      if (!user?._id) {
-        return alert("❌ User not found. Please login again.");
-      }
-
-      const token = localStorage.getItem("token");
-      
       const response = await axios.post(
         "http://localhost:5000/api/bet/place",
         {
-          userId: user._id,
           game: "numcards",
-          selection: selectedNumber,
           amount: parseInt(betAmount),
-          roundId: roundId,
-          multiplier: multiplier
+          selection: selectedNumber,
+          betType: "number",
+          multiplier: multiplier,
+          roundId: roundId
         },
         {
           headers: { Authorization: `Bearer ${token}` }
         }
       );
-
+      
       // Update wallet
       setWallet(response.data.wallet);
+      setCurrentBetId(response.data.betId);
+      
       const updatedUser = { ...user, wallet: response.data.wallet };
       localStorage.setItem("user", JSON.stringify(updatedUser));
       setUser(updatedUser);
-
-      // Emit to socket for live updates
+      
+      // Refresh history
+      setHistoryRefresh(prev => prev + 1);
+      
+      // Emit live bet
       socket.emit("place_bet", {
         userName: user.name,
-        userId: user._id,
         selection: selectedNumber,
-        amount: parseInt(betAmount),
-        game: "numcards",
-        roundId: roundId
+        amount: parseInt(betAmount)
       });
-
-      // Show confirmation
-      alert(`✅ Bet placed: ₹${parseInt(betAmount)} on number ${selectedNumber}`);
-
-      // Clear bet amount but keep selection
+      
       setBetAmount("");
-
+      
     } catch (err: any) {
       console.error("Bet error:", err);
       if (err.response?.status === 401) {
         alert("Session expired. Please login again.");
         localStorage.removeItem("token");
         localStorage.removeItem("user");
-        router.push("/login?redirect=/numcards");
+        router.push("/login");
       } else {
-        alert(err?.response?.data?.error || "❌ Bet failed. Please try again.");
+        alert(err.response?.data?.error || "❌ Bet failed. Please try again.");
       }
     }
   };
 
-  // Show loading screen while checking authentication
   if (isLoading) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-500 mx-auto mb-4"></div>
-          <p className="text-zinc-400">Checking authentication...</p>
-        </div>
-      </main>
-    );
-  }
-
-  // If not authenticated, show login required message (should redirect, but just in case)
-  if (!isAuthenticated) {
-    return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto px-6">
-          <LogIn size={64} className="text-red-500 mx-auto mb-6" />
-          <h1 className="text-4xl font-black mb-4">Login Required</h1>
-          <p className="text-zinc-400 mb-8">
-            Please login to access the NumCards game and start winning!
-          </p>
-          <Link
-            href="/login?redirect=/numcards"
-            className="inline-block bg-green-500 text-black px-8 py-4 rounded-2xl font-black hover:bg-green-600 transition-colors"
-          >
-            LOGIN NOW
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
-  // GAME STOPPED
-  if (control?.gameStatus === "STOPPED") {
-    return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle size={64} className="text-red-500 mx-auto mb-6" />
-          <h1 className="text-7xl font-black text-red-500 mb-6">GAME STOPPED</h1>
-          <p className="text-zinc-500 text-2xl">Server under maintenance</p>
-          <Link href="/" className="inline-block mt-8 bg-green-500 text-black px-8 py-4 rounded-2xl font-bold">
-            BACK TO HOME
-          </Link>
+          <p className="text-zinc-400">Loading game...</p>
         </div>
       </main>
     );
@@ -305,190 +307,211 @@ export default function NumCardsPage() {
   return (
     <main className="min-h-screen bg-black text-white">
       <div className="max-w-7xl mx-auto p-6">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <Link href="/" className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+            <ArrowLeft size={20} /> Back to Dashboard
+          </Link>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-2 bg-zinc-800 px-4 py-2 rounded-xl hover:bg-zinc-700 transition-colors"
+          >
+            <History size={18} />
+            {showHistory ? "Hide History" : "Show History"}
+          </button>
+        </div>
 
-        {/* BACK BUTTON */}
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-8 transition-colors"
-        >
-          <ArrowLeft size={20} />
-          Back to Dashboard
-        </Link>
-
-        {/* USER GREETING */}
+        {/* Welcome Banner */}
         <div className="bg-linear-to-r from-green-900/30 to-black border border-green-500/30 rounded-3xl p-4 mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-2xl font-bold text-green-400">
-                Welcome back, {user?.name}! 👋
-              </h2>
-              <p className="text-zinc-400">Ready to test your luck?</p>
+              <h2 className="text-2xl font-bold text-green-400">Welcome back, {user?.name}! 👋</h2>
+              <p className="text-zinc-400">Round: <span className="text-green-400 font-mono">{roundId}</span></p>
             </div>
-            <div className="text-right">
-              <p className="text-zinc-400 text-sm">Round ID</p>
-              <p className="font-mono font-bold text-green-400">{roundId}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* TOP STATS */}
-        <div className="grid lg:grid-cols-3 gap-6 mb-10">
-          {/* TIMER */}
-          <div className="bg-gray-950 border border-gray-800 rounded-3xl p-8">
-            <div className="flex items-center gap-4">
-              <Timer className="text-green-400" size={32} />
-              <div>
-                <p className="text-gray-500">Time Left</p>
-                <h2 className={`text-5xl font-black ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-green-400'}`}>
-                  {timer}s
-                </h2>
-              </div>
-            </div>
-          </div>
-
-          {/* WALLET */}
-          <div className="bg-gray-950 border border-gray-800 rounded-3xl p-8">
-            <div className="flex items-center gap-4">
-              <Wallet className="text-green-400" size={32} />
-              <div>
-                <p className="text-gray-500">Wallet Balance</p>
-                <h2 className="text-5xl font-black text-green-400">
-                  ₹{wallet.toLocaleString()}
-                </h2>
-              </div>
-            </div>
-          </div>
-
-          {/* LAST RESULT */}
-          <div className="bg-gray-950 border border-gray-800 rounded-3xl p-8">
-            <div className="flex items-center gap-4">
-              <Trophy className="text-green-400" size={32} />
-              <div>
-                <p className="text-gray-500">Last Result</p>
-                <h2 className={`text-5xl font-black ${lastResult ? 'text-yellow-400' : 'text-gray-500'}`}>
-                  {lastResult ?? "—"}
-                </h2>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* NUMBERS GRID */}
-        <div className="bg-gray-950 border border-gray-800 rounded-3xl p-8 mb-8">
-          <h2 className="text-3xl font-black mb-8">
-            Select Your Lucky Number
-            {selectedNumber && <span className="text-green-400 ml-4">✓ Selected: {selectedNumber}</span>}
-          </h2>
-
-          <div className="grid grid-cols-5 md:grid-cols-10 gap-4">
-            {Array.from({ length: 10 }).map((_, i) => {
-              const num = (i + 1).toString();
-              return (
-                <button
-                  key={i}
-                  onClick={() => setSelectedNumber(num)}
-                  disabled={control?.gameStatus === "PAUSED"}
-                  className={`h-20 rounded-2xl border-2 text-2xl font-black transition-all transform hover:scale-105 ${
-                    selectedNumber === num
-                      ? "bg-green-500 border-green-500 text-black scale-105"
-                      : "bg-gray-900 border-gray-800 hover:border-green-500 hover:bg-gray-800"
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {num}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* BETTING SECTION */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* LEFT - BET CONTROLS */}
-          <div className="bg-gray-950 border border-gray-800 rounded-3xl p-8">
-            <h2 className="text-3xl font-black mb-6">Place Your Bet</h2>
-
-            <input
-              type="number"
-              min="10"
-              max={wallet}
-              value={betAmount}
-              onChange={(e) => setBetAmount(e.target.value)}
-              placeholder="Enter Bet Amount"
-              className="w-full bg-black border-2 border-zinc-800 focus:border-green-500 outline-none rounded-2xl px-6 py-5 text-2xl font-black text-white placeholder:text-zinc-500 mb-6"
-              disabled={control?.gameStatus === "PAUSED"}
-            />
-
-            <div className="grid grid-cols-4 gap-3 mb-6">
-              {[100, 500, 1000, 5000].map((amount) => (
-                <button
-                  key={amount}
-                  onClick={() => setBetAmount(String(amount))}
-                  className="bg-zinc-900 border border-zinc-700 hover:border-green-500 hover:bg-zinc-800 h-14 rounded-2xl font-black transition"
-                >
-                  ₹{amount}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={placeBet}
-              disabled={control?.gameStatus === "PAUSED" || !selectedNumber || !betAmount}
-              className={`w-full rounded-2xl py-5 text-2xl font-black transition-all transform hover:scale-105 ${
-                control?.gameStatus === "PAUSED" || !selectedNumber || !betAmount
-                  ? "bg-zinc-700 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-500"
-              }`}
-            >
-              {control?.gameStatus === "PAUSED" 
-                ? "⏸️ BETTING PAUSED" 
-                : !selectedNumber 
-                ? "⚠️ SELECT A NUMBER" 
-                : `🎲 PLACE BET ₹${betAmount || 0}`}
-            </button>
-
-            {/* Bet Info */}
-            {selectedNumber && betAmount && (
-              <div className="mt-6 p-4 bg-green-500/10 border border-green-500/30 rounded-2xl">
-                <p className="text-center">
-                  <span className="text-zinc-400">Potential Win: </span>
-                  <span className="text-2xl font-bold text-green-400">
-                    ₹{(parseInt(betAmount) * multiplier).toLocaleString()}
-                  </span>
-                </p>
+            {lastWin && (
+              <div className="bg-green-500/20 border border-green-500 rounded-xl px-6 py-3 animate-bounce">
+                <p className="text-green-400 font-bold text-xl">+₹{lastWin.toLocaleString()}</p>
               </div>
             )}
           </div>
+        </div>
 
-          {/* RIGHT - LIVE BETS */}
-          <div className="bg-gray-950 border border-gray-800 rounded-3xl p-8">
-            <h2 className="text-3xl font-black mb-6">
-              🔴 Live Bets <span className="text-sm text-zinc-500">(Last 20)</span>
-            </h2>
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+            <div className="flex items-center gap-2 text-green-400 mb-2">
+              <Trophy size={20} />
+              <span className="text-sm">Total Wins</span>
+            </div>
+            <p className="text-2xl font-bold">{totalWins}</p>
+          </div>
+          
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+            <div className="flex items-center gap-2 text-red-400 mb-2">
+              <TrendingUp size={20} />
+              <span className="text-sm">Total Losses</span>
+            </div>
+            <p className="text-2xl font-bold">{totalLosses}</p>
+          </div>
+          
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+            <div className="flex items-center gap-2 text-yellow-400 mb-2">
+              <Award size={20} />
+              <span className="text-sm">Win Rate</span>
+            </div>
+            <p className="text-2xl font-bold">
+              {totalWins + totalLosses > 0 
+                ? Math.round((totalWins / (totalWins + totalLosses)) * 100) 
+                : 0}%
+            </p>
+          </div>
+          
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+            <div className="flex items-center gap-2 text-blue-400 mb-2">
+              <Wallet size={20} />
+              <span className="text-sm">Balance</span>
+            </div>
+            <p className="text-2xl font-bold text-green-400">₹{wallet.toLocaleString()}</p>
+          </div>
+        </div>
 
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {liveBets.length === 0 && (
-                <p className="text-gray-500 text-center py-8">No bets placed yet. Be the first! 🎲</p>
-              )}
-
-              {liveBets.map((bet, index) => (
-                <div key={index} className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-green-500 transition-colors">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-green-400 font-bold">{bet.userName}</p>
-                      <p className="text-sm text-gray-400">
-                        Bet on <span className="text-yellow-400 font-bold">{bet.selection}</span>
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-white">₹{bet.amount}</p>
-                      <p className="text-xs text-gray-500">x{multiplier}</p>
-                    </div>
+        {/* Main Game Area */}
+        <div className="grid lg:grid-cols-3 gap-6 mb-8">
+          {/* Game Controls */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Timer & Result */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                <div className="flex items-center gap-3">
+                  <Timer className="text-green-400" size={28} />
+                  <div>
+                    <p className="text-zinc-500 text-sm">Time Left</p>
+                    <p className={`text-4xl font-black ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-green-400'}`}>
+                      {timer}s
+                    </p>
                   </div>
                 </div>
-              ))}
+              </div>
+              
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                <div className="flex items-center gap-3">
+                  <Trophy className="text-yellow-400" size={28} />
+                  <div>
+                    <p className="text-zinc-500 text-sm">Last Result</p>
+                    <p className="text-4xl font-black text-yellow-400">
+                      {lastResult || "—"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Numbers Grid */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+              <h3 className="text-xl font-bold mb-4">Select Number (1-10)</h3>
+              <div className="grid grid-cols-5 gap-3">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                  <button
+                    key={num}
+                    onClick={() => setSelectedNumber(num.toString())}
+                    className={`h-16 rounded-xl text-xl font-bold transition-all transform hover:scale-105 ${
+                      selectedNumber === num.toString()
+                        ? "bg-green-500 text-black scale-105"
+                        : "bg-zinc-800 hover:bg-zinc-700"
+                    }`}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Bet Controls */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+              <h3 className="text-xl font-bold mb-4">Place Your Bet</h3>
+              
+              <input
+                type="number"
+                min="10"
+                max={wallet}
+                value={betAmount}
+                onChange={(e) => setBetAmount(e.target.value)}
+                placeholder="Enter amount (Min ₹10)"
+                className="w-full bg-black border-2 border-zinc-700 rounded-xl px-4 py-3 mb-4 focus:border-green-500 outline-none"
+              />
+              
+              <div className="grid grid-cols-4 gap-2 mb-4">
+                {[100, 500, 1000, 5000].map((amount) => (
+                  <button
+                    key={amount}
+                    onClick={() => setBetAmount(amount.toString())}
+                    className="bg-zinc-800 py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+                  >
+                    ₹{amount}
+                  </button>
+                ))}
+              </div>
+              
+              {selectedNumber && betAmount && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 mb-4">
+                  <p className="text-center">
+                    <span className="text-zinc-400">Potential Win: </span>
+                    <span className="text-2xl font-bold text-green-400">
+                      ₹{(parseInt(betAmount) * multiplier).toLocaleString()}
+                    </span>
+                  </p>
+                </div>
+              )}
+              
+              <button
+                onClick={placeBet}
+                disabled={!selectedNumber || !betAmount || control?.gameStatus === "PAUSED"}
+                className="w-full bg-green-600 hover:bg-green-500 disabled:bg-zinc-700 disabled:cursor-not-allowed py-4 rounded-xl font-bold text-xl transition-colors"
+              >
+                {!selectedNumber ? "SELECT A NUMBER" : 
+                 !betAmount ? "ENTER BET AMOUNT" :
+                 control?.gameStatus === "PAUSED" ? "BETTING PAUSED" :
+                 "PLACE BET"}
+              </button>
+            </div>
+          </div>
+
+          {/* Live Bets */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+              Live Bets
+            </h3>
+            
+            <div className="space-y-3 max-h-150 overflow-y-auto">
+              {liveBets.length === 0 ? (
+                <p className="text-zinc-500 text-center py-8">No live bets yet</p>
+              ) : (
+                liveBets.map((bet, index) => (
+                  <div key={index} className="bg-black rounded-xl p-3 border border-zinc-800">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-green-400">{bet.userName}</p>
+                        <p className="text-sm text-zinc-400">Bet on: <span className="text-yellow-400">{bet.selection}</span></p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-bold">₹{bet.amount}</p>
+                        <p className="text-xs text-zinc-500">x{multiplier}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
+
+        {/* Bet History Component */}
+        {showHistory && (
+          <div className="mt-8">
+            <BetHistory game="numcards" refreshTrigger={historyRefresh} />
+          </div>
+        )}
       </div>
     </main>
   );

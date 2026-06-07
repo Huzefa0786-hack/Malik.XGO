@@ -72,7 +72,7 @@ userId:
         {/* Logo */}
         <div className="text-center mb-10">
           <h1 className="text-5xl font-black text-green-400">
-            MATKA.KING
+            Malik.XGO
           </h1>
 
           <p className="text-zinc-500 mt-2">

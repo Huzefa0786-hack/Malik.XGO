@@ -65,7 +65,7 @@ export default function AdminLogin() {
         </h1>
 
         <p className="text-zinc-500 text-center mb-8">
-          MATKA.KING Control Panel
+          Malik.XGO Control Panel
         </p>
 
         {/* USERNAME */}

@@ -20,7 +20,7 @@ router.post('/register', async (req, res) => {
     }
     
     const hashedPassword = await bcrypt.hash(password, 10);
-    const uid = 'MK' + Math.floor(100000 + Math.random() * 900000);
+    const uid = 'MX' + Math.floor(100000 + Math.random() * 900000);
     
     const user = new User({
       uid,
@@ -62,6 +62,10 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
     
     const user = await User.findOne({ email });
     if (!user) {
@@ -106,6 +110,10 @@ router.get('/profile', async (req, res) => {
     
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
     
     res.json({ success: true, user });
   } catch (err) {

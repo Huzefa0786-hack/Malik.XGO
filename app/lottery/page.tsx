@@ -1,705 +1,329 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 import Link from "next/link";
-import {
-  Wallet,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  Clock3,
-  Trophy,
-  Users,
-  Crown,
-} from "lucide-react";
+import { useRouter } from "next/navigation";
+import BetHistory from "../components/BetHistory";
+import { ArrowLeft, Wallet, Trophy, Ticket, Clock, Users, History, TrendingUp } from "lucide-react";
 
-export default function ColorTradePage() {
-  const [wallet, setWallet] = useState(5000);
-
-  const [timer, setTimer] = useState(30);
-
-  const [period, setPeriod] =
-    useState("202606030001");
-
-  const [selectedType, setSelectedType] =
-    useState("");
-
-  const [selectedValue, setSelectedValue] =
-    useState("");
-
-  const [betAmount, setBetAmount] =
-    useState(100);
-
-  const [showBetModal, setShowBetModal] =
-    useState(false);
-
- const [history, setHistory] = useState<
-  {
-    type: string;
-    value: string;
-    amount: number;
-    status: string;
-  }[]
->([]);
-
-  const [results, setResults] = useState<
-  {
-    number: number;
-    color: string;
-  }[]
->([]);
-
-  const [onlineUsers, setOnlineUsers] =
-    useState(2847);
-
- const [liveWins, setLiveWins] =
-  useState([
-    "Rahul won ₹4,500",
-    "Aryan won ₹8,200",
-    "Kabir won ₹2,900",
-  ]);
-
-const generateResult = () => {
-  const number = Math.floor(
-    Math.random() * 10
-  );
-
-  let color = "GREEN";
-
-  if (
-    number === 0 ||
-    number === 5
-  ) {
-    color = "VIOLET";
-  } else if (
-    number % 2 === 0
-  ) {
-    color = "RED";
-  }
-
-  setResults((prev) => [
-    {
-      number,
-      color,
-    },
-    ...prev.slice(0, 9),
-  ]);
-
-  setPeriod((prev) =>
-    String(Number(prev) + 1)
-  );
-};
-
-useEffect(() => {
-  generateResult();
-
-  const interval = setInterval(
-    generateResult,
-    30000
-  );
-
-  return () =>
-    clearInterval(interval);
-}, []);
+export default function LotteryPage() {
+  const router = useRouter();
+  const [wallet, setWallet] = useState(0);
+  const [user, setUser] = useState<any>(null);
+  const [ticketCount, setTicketCount] = useState(1);
+  const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
+  const [lotteryNumbers, setLotteryNumbers] = useState<number[]>([]);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [lastWinners, setLastWinners] = useState<{ name: string; amount: number; numbers: number[] }[]>([]);
+  const [nextDrawTime, setNextDrawTime] = useState(300);
+  const [loading, setLoading] = useState(true);
+  const [jackpotAmount, setJackpotAmount] = useState(100000);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  const [stats, setStats] = useState({ totalWins: 0, totalLosses: 0 });
 
   useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userData = localStorage.getItem("user");
 
-    const interval = setInterval(() => {
-
-      const names = [
-        "Rahul",
-        "Aryan",
-        "Kabir",
-        "Ayaan",
-        "Rohit",
-      ];
-
-      const winner =
-        names[
-          Math.floor(
-            Math.random() *
-              names.length
-          )
-        ];
-
-      const amount =
-        Math.floor(
-          Math.random() *
-            9000
-        ) + 1000;
-
-      setLiveWins(
-        (prev) => [
-          `${winner} won ₹${amount}`,
-          ...prev.slice(
-            0,
-            4
-          ),
-        ]
-      );
-
-      setOnlineUsers(
-        (prev) =>
-          prev +
-          Math.floor(
-            Math.random() * 3
-          )
-      );
-
-    }, 5000);
-
-    return () =>
-      clearInterval(
-        interval
-      );
-
-  }, []);
-
-useEffect(() => {
-
-  const generateResult = () => {
-
-    const number =
-      Math.floor(
-        Math.random() * 10
-      );
-
-    let color = "GREEN";
-
-    if (
-      number === 0 ||
-      number === 5
-    ) {
-      color = "VIOLET";
-    } else if (
-      number % 2 === 0
-    ) {
-      color = "RED";
+    if (!token || !userData) {
+      router.push("/login?redirect=/lottery");
+      return;
     }
 
-    setResults((prev: any) => [
-      {
-        number,
-        color,
-      },
-      ...prev.slice(0, 9),
-    ]);
+    const parsedUser = JSON.parse(userData);
+    setUser(parsedUser);
+    setWallet(parsedUser.wallet || 0);
+    setLoading(false);
+    fetchStats(token);
+    
+    const numbers: number[] = [];
+    while (numbers.length < 6) {
+      const num = Math.floor(Math.random() * 49) + 1;
+      if (!numbers.includes(num)) numbers.push(num);
+    }
+    setLotteryNumbers(numbers.sort((a, b) => a - b));
+  }, [router]);
+
+  const fetchStats = async (token: string) => {
+    try {
+      const response = await axios.get("http://localhost:5000/api/bet/history?game=lottery", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.success) {
+        setStats({
+          totalWins: response.data.stats?.totalWins || 0,
+          totalLosses: response.data.stats?.totalLosses || 0
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch stats:", error);
+    }
   };
 
-  generateResult();
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNextDrawTime(prev => prev > 0 ? prev - 1 : 300);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  const interval =
-    setInterval(
-      generateResult,
-      30000
+  const toggleNumber = (num: number) => {
+    if (selectedNumbers.includes(num)) {
+      setSelectedNumbers(selectedNumbers.filter(n => n !== num));
+    } else if (selectedNumbers.length < 6) {
+      setSelectedNumbers([...selectedNumbers, num].sort((a, b) => a - b));
+    }
+  };
+
+  const buyTickets = async () => {
+    const token = localStorage.getItem("token");
+    const cost = ticketCount * 10;
+    
+    if (cost > wallet) {
+      alert("Insufficient balance!");
+      return;
+    }
+    
+    if (selectedNumbers.length !== 6) {
+      alert("Please select 6 numbers!");
+      return;
+    }
+
+    try {
+      const response = await axios.post(
+        "http://localhost:5000/api/bet/place",
+        { 
+          game: "lottery", 
+          amount: cost, 
+          selection: selectedNumbers.join(","),
+          betType: "lottery",
+          multiplier: jackpotAmount / cost
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      setWallet(response.data.wallet);
+      setHistoryRefresh(prev => prev + 1);
+      
+      const updatedUser = { ...user, wallet: response.data.wallet };
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      
+      alert(`🎫 Purchased ${ticketCount} ticket(s) with numbers: ${selectedNumbers.join(", ")}`);
+      setSelectedNumbers([]);
+      
+    } catch (error: any) {
+      alert(error.response?.data?.error || "Failed to purchase tickets");
+    }
+  };
+
+  const drawLottery = async () => {
+    if (isDrawing) return;
+    setIsDrawing(true);
+    
+    let drawInterval = setInterval(() => {
+      const randomNumbers: number[] = [];
+      while (randomNumbers.length < 6) {
+        const num = Math.floor(Math.random() * 49) + 1;
+        if (!randomNumbers.includes(num)) randomNumbers.push(num);
+      }
+      setLotteryNumbers(randomNumbers.sort((a, b) => a - b));
+    }, 100);
+    
+    setTimeout(async () => {
+      clearInterval(drawInterval);
+      const finalNumbers: number[] = [];
+      while (finalNumbers.length < 6) {
+        const num = Math.floor(Math.random() * 49) + 1;
+        if (!finalNumbers.includes(num)) finalNumbers.push(num);
+      }
+      finalNumbers.sort((a, b) => a - b);
+      setLotteryNumbers(finalNumbers);
+      
+      // Check if user won
+      const matchedNumbers = selectedNumbers.filter(n => finalNumbers.includes(n));
+      if (matchedNumbers.length >= 3) {
+        const winAmount = (jackpotAmount / 100) * (matchedNumbers.length * 10);
+        const token = localStorage.getItem("token");
+        if (token) {
+          await axios.post(
+            "http://localhost:5000/api/bet/cashout",
+            { winAmount: winAmount, result: `${matchedNumbers.length} matches`, multiplier: matchedNumbers.length },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setHistoryRefresh(prev => prev + 1);
+          fetchStats(token);
+          alert(`🎉 You won ₹${winAmount.toLocaleString()} with ${matchedNumbers.length} matches! 🎉`);
+        }
+      }
+      
+      setLastWinners(prev => [{
+        name: user?.name || "Winner",
+        amount: Math.floor(Math.random() * 50000) + 10000,
+        numbers: finalNumbers
+      }, ...prev.slice(0, 4)]);
+      
+      setIsDrawing(false);
+    }, 3000);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-500"></div>
+      </main>
     );
-
-  return () =>
-    clearInterval(interval);
-
-}, []);
-const placeBet = () => {
-  if (!selectedValue) {
-    alert("Select an option");
-    return;
   }
 
-  if (betAmount <= 0) {
-    alert("Invalid bet amount");
-    return;
-  }
-
-  if (betAmount > wallet) {
-    alert("Insufficient balance");
-    return;
-  }
-
-  setWallet((prev) => prev - betAmount);
-
-  setHistory((prev) => [
-    {
-      type: selectedType,
-      value: selectedValue,
-      amount: betAmount,
-      status: "Pending",
-    },
-    ...prev,
-  ]);
-
-  setShowBetModal(false);
-
-  alert(`Bet placed on ${selectedValue}`);
-};
   return (
     <main className="min-h-screen bg-black text-white">
-
-      {/* Background */}
-
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-green-500/10 blur-[150px] rounded-full" />
-
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/10 blur-[150px] rounded-full" />
-
-      </div>
-
-      {/* Header */}
-
-      <div className="border-b border-zinc-800 bg-zinc-950 sticky top-0 z-50">
-
-        <div className="max-w-7xl mx-auto p-4 flex items-center justify-between">
-
-          <Link
-            href="/"
-            className="flex items-center gap-3"
-          >
-
-            <Crown className="text-green-400" />
-
-            <span className="text-3xl font-black text-green-400">
-              MATKA.KING
-            </span>
-
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="flex justify-between items-center mb-8">
+          <Link href="/" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white">
+            <ArrowLeft size={20} /> Back
           </Link>
-
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 flex items-center gap-2">
-
-            <Wallet className="text-green-400" />
-
-            <span className="font-black text-green-400">
-              ₹{wallet}
-            </span>
-
-          </div>
-
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-2 bg-zinc-800 px-4 py-2 rounded-xl"
+          >
+            <History size={18} /> History
+          </button>
         </div>
 
-      </div>
-
-      <div className="max-w-7xl mx-auto p-4">
-
-        {/* Wallet Card */}
-
-        <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 mb-6">
-
-          <h2 className="text-center text-3xl font-black">
-            Wallet Balance
-          </h2>
-
-          <h1 className="text-center text-6xl font-black text-green-400 mt-4">
-            ₹{wallet}
-          </h1>
-
-          <div className="grid grid-cols-2 gap-4 mt-6">
-
-            <Link
-              href="/withdraw"
-              className="bg-red-500 rounded-2xl py-4 text-center font-black"
-            >
-              <ArrowUpCircle className="mx-auto mb-2" />
-              Withdraw
-            </Link>
-
-            <Link
-              href="/deposit"
-              className="bg-green-500 text-black rounded-2xl py-4 text-center font-black"
-            >
-              <ArrowDownCircle className="mx-auto mb-2" />
-              Deposit
-            </Link>
-
-          </div>
-
-        </div>
-
-        {/* Timer Card */}
-
-        <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 mb-6">
-
-          <div className="flex justify-between items-center">
-
-            <div>
-
-              <h2 className="text-3xl font-black">
-                WinGo 30s
-              </h2>
-
-              <p className="text-zinc-500 mt-2">
-                Period: {period}
-              </p>
-
+        <div className="grid lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-linear-to-r from-purple-900 to-purple-700 rounded-3xl p-6">
+            <div className="flex items-center gap-3">
+              <Trophy className="text-yellow-400" size={32} />
+              <div>
+                <p className="text-zinc-200">Jackpot</p>
+                <h2 className="text-4xl font-black text-yellow-400">₹{jackpotAmount.toLocaleString()}</h2>
+              </div>
             </div>
-
-            <div className="text-center">
-
-              <Clock3 className="mx-auto text-green-400 mb-2" />
-
-              <h1 className="text-6xl font-black text-green-400">
-                {timer}
-              </h1>
-
-            </div>
-
           </div>
-
-        </div>
-                {/* Online Users */}
-
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
-
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6">
-
-            <div className="flex items-center gap-3 mb-3">
-
-              <Users className="text-green-400" />
-
-              <h2 className="text-2xl font-black">
-                Online Players
-              </h2>
-
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+            <div className="flex items-center gap-3">
+              <Wallet className="text-green-400" size={32} />
+              <div>
+                <p className="text-zinc-500">Your Balance</p>
+                <h2 className="text-4xl font-black text-green-400">₹{wallet.toLocaleString()}</h2>
+              </div>
             </div>
-
-            <h1 className="text-5xl font-black text-green-400">
-              {onlineUsers}
-            </h1>
-
           </div>
-
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6">
-
-            <div className="flex items-center gap-3 mb-3">
-
-              <Trophy className="text-yellow-400" />
-
-              <h2 className="text-2xl font-black">
-                Last Result
-              </h2>
-
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+            <div className="flex items-center gap-3">
+              <Clock className="text-blue-400" size={32} />
+              <div>
+                <p className="text-zinc-500">Next Draw</p>
+                <h2 className="text-4xl font-black text-blue-400">{formatTime(nextDrawTime)}</h2>
+              </div>
             </div>
-
-            <h1 className="text-5xl font-black text-yellow-400">
-              {results[0]?.number}
-            </h1>
-
           </div>
-
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
+            <div className="flex items-center gap-3">
+              <TrendingUp className="text-green-400" size={32} />
+              <div>
+                <p className="text-zinc-500">Win/Loss</p>
+                <h2 className="text-2xl font-black">
+                  <span className="text-green-400">{stats.totalWins}</span>
+                  <span className="text-zinc-600"> / </span>
+                  <span className="text-red-400">{stats.totalLosses}</span>
+                </h2>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Color Betting */}
-
-        <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 mb-6">
-
-          <h2 className="text-3xl font-black mb-6">
-            Color Betting
-          </h2>
-
-          <div className="grid grid-cols-3 gap-4">
-
-            <button
-              onClick={() => {
-                setSelectedType("color");
-                setSelectedValue("GREEN");
-                setShowBetModal(true);
-              }}
-              className="h-20 rounded-2xl bg-green-500 hover:scale-105 transition-all font-black text-2xl"
-            >
-              GREEN
-            </button>
-
-            <button
-              onClick={() => {
-                setSelectedType("color");
-                setSelectedValue("VIOLET");
-                setShowBetModal(true);
-              }}
-              className="h-20 rounded-2xl bg-purple-500 hover:scale-105 transition-all font-black text-2xl"
-            >
-              VIOLET
-            </button>
-
-            <button
-              onClick={() => {
-                setSelectedType("color");
-                setSelectedValue("RED");
-                setShowBetModal(true);
-              }}
-              className="h-20 rounded-2xl bg-red-500 hover:scale-105 transition-all font-black text-2xl"
-            >
-              RED
-            </button>
-
+        {/* Lottery Numbers Display */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 mb-8">
+          <h2 className="text-3xl font-black mb-6 text-center">Today's Lottery Numbers</h2>
+          <div className="flex justify-center gap-4 mb-6">
+            {lotteryNumbers.map((num, i) => (
+              <div key={i} className="w-20 h-20 rounded-2xl bg-linear-to-br from-purple-600 to-pink-600 flex items-center justify-center text-3xl font-black">
+                {num}
+              </div>
+            ))}
           </div>
-
+          <button onClick={drawLottery} disabled={isDrawing} className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 py-4 rounded-2xl font-black text-xl">
+            {isDrawing ? "DRAWING..." : "DRAW NEW NUMBERS 🎲"}
+          </button>
         </div>
 
-        {/* Number Betting */}
-
-        <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 mb-6">
-
-          <h2 className="text-3xl font-black mb-6">
-            Number Betting
-          </h2>
-
-          <div className="grid grid-cols-5 gap-4">
-
-            {[0,1,2,3,4,5,6,7,8,9].map((num) => (
-
+        {/* Number Selection */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 mb-8">
+          <h2 className="text-3xl font-black mb-4">Select Your Numbers (1-49)</h2>
+          <p className="text-zinc-500 mb-6">Choose 6 numbers | Each ticket: ₹10</p>
+          
+          <div className="grid grid-cols-7 gap-3 mb-8">
+            {Array.from({ length: 49 }, (_, i) => i + 1).map((num) => (
               <button
                 key={num}
-                onClick={() => {
-                  setSelectedType("number");
-                  setSelectedValue(String(num));
-                  setShowBetModal(true);
-                }}
-                className={`
-                  h-20
-                  rounded-2xl
-                  text-3xl
-                  font-black
-                  transition-all
-                  hover:scale-105
-                  ${
-                    num % 2 === 0
-                      ? "bg-red-500/20 border border-red-500"
-                      : "bg-green-500/20 border border-green-500"
-                  }
-                `}
+                onClick={() => toggleNumber(num)}
+                className={`h-12 rounded-xl font-bold transition-all ${
+                  selectedNumbers.includes(num) ? "bg-green-500 text-black scale-105" : "bg-zinc-800 hover:bg-zinc-700"
+                }`}
               >
                 {num}
               </button>
-
             ))}
-
           </div>
-
-        </div>
-
-        {/* Big Small */}
-
-        <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 mb-6">
-
-          <h2 className="text-3xl font-black mb-6">
-            Big / Small
-          </h2>
-
-          <div className="grid grid-cols-2 gap-4">
-
-            <button
-              onClick={() => {
-                setSelectedType("size");
-                setSelectedValue("BIG");
-                setShowBetModal(true);
-              }}
-              className="h-24 rounded-2xl bg-orange-500 font-black text-3xl hover:scale-105 transition-all"
-            >
-              BIG
-            </button>
-
-            <button
-              onClick={() => {
-                setSelectedType("size");
-                setSelectedValue("SMALL");
-                setShowBetModal(true);
-              }}
-              className="h-24 rounded-2xl bg-blue-500 font-black text-3xl hover:scale-105 transition-all"
-            >
-              SMALL
-            </button>
-
-          </div>
-
-        </div>
-
-        {/* Quick Amounts */}
-
-        <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 mb-6">
-
-          <h2 className="text-3xl font-black mb-6">
-            Quick Bet Amount
-          </h2>
-
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-
-            {[10,50,100,500,1000,5000].map((amt) => (
-
-              <button
-                key={amt}
-                onClick={() =>
-                  setBetAmount(amt)
-                }
-                className="h-14 bg-zinc-900 border border-zinc-700 rounded-xl hover:border-green-500 hover:bg-green-500/10 font-black transition-all"
-              >
-                ₹{amt}
-              </button>
-
-            ))}
-
-          </div>
-
-        </div>
-
-        {/* Bet Modal */}
-
-        {showBetModal && (
-
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-
-            <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 w-96">
-
-              <h2 className="text-3xl font-black mb-5">
-                Place Bet
-              </h2>
-
-              <div className="bg-black border border-zinc-800 rounded-2xl p-4 mb-5">
-
-                <p className="text-zinc-500">
-                  Selected
-                </p>
-
-                <h1 className="text-3xl font-black text-green-400">
-                  {selectedValue}
-                </h1>
-
-              </div>
-
-              <input
-                type="number"
-                value={betAmount}
-                onChange={(e) =>
-                  setBetAmount(
-                    Number(e.target.value)
-                  )
-                }
-                className="w-full bg-black border border-zinc-700 rounded-2xl p-4 text-xl"
-              />
-
-              <div className="grid grid-cols-2 gap-4 mt-6">
-
-                <button
-                  onClick={() =>
-                    setShowBetModal(false)
-                  }
-                  className="bg-zinc-800 rounded-2xl py-4 font-black"
-                >
-                  CANCEL
-                </button>
-
-                <button
-  onClick={placeBet}
-  className="bg-green-500 text-black rounded-2xl py-4 font-black"
->
-  CONFIRM
-</button>
-              </div>
-
+          
+          <div className="bg-black rounded-2xl p-4 mb-6">
+            <p className="text-zinc-500 mb-2">Selected Numbers:</p>
+            <div className="flex gap-2 flex-wrap">
+              {selectedNumbers.length > 0 ? selectedNumbers.map((num, i) => (
+                <span key={i} className="bg-green-500/20 text-green-400 px-3 py-1 rounded-lg font-bold">{num}</span>
+              )) : <span className="text-zinc-500">None selected</span>}
             </div>
-
           </div>
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-zinc-500 mb-2">Number of Tickets</label>
+              <input type="number" min={1} max={10} value={ticketCount} onChange={(e) => setTicketCount(Number(e.target.value))} className="w-full bg-black border border-zinc-700 rounded-xl p-4" />
+            </div>
+            <button onClick={buyTickets} className="bg-green-500 hover:bg-green-600 text-black rounded-xl py-4 font-black text-xl flex items-center justify-center gap-2">
+              <Ticket size={24} /> BUY ₹{ticketCount * 10}
+            </button>
+          </div>
+        </div>
 
+        {/* Recent Winners */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
+          <h2 className="text-3xl font-black mb-6 flex items-center gap-2">
+            <Trophy className="text-yellow-400" /> Recent Winners
+          </h2>
+          <div className="space-y-3">
+            {lastWinners.length === 0 ? (
+              <p className="text-zinc-500 text-center py-8">No winners yet. Be the first! 🎉</p>
+            ) : (
+              lastWinners.map((winner, index) => (
+                <div key={index} className="bg-black rounded-2xl p-4 flex justify-between items-center">
+                  <div>
+                    <p className="font-bold">{winner.name}</p>
+                    <p className="text-sm text-zinc-500">{winner.numbers.join(", ")}</p>
+                  </div>
+                  <p className="text-green-400 font-bold text-xl">+₹{winner.amount.toLocaleString()}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Bet History */}
+        {showHistory && (
+          <div className="mt-8">
+            <BetHistory game="lottery" refreshTrigger={historyRefresh} />
+          </div>
         )}
-        {/* Betting History */}
-
-<div className="mt-6 bg-zinc-950 border border-zinc-800 rounded-3xl p-6">
-
-  <div className="flex items-center justify-between mb-5">
-
-    <h2 className="text-2xl font-black">
-      Recent Bets
-    </h2>
-
-    <span className="text-green-400 font-bold">
-      {history.length} Bets
-    </span>
-
-  </div>
-
-  {history.length === 0 ? (
-
-    <div className="text-center py-10 text-zinc-500">
-      No Bets Yet
-    </div>
-
-  ) : (
-
-    <div className="space-y-3">
-
-      {history.map((bet: any, index) => (
-
-        <div
-          key={index}
-          className="bg-black border border-zinc-800 rounded-2xl p-4 flex justify-between items-center"
-        >
-
-          <div>
-
-            <p className="font-bold">
-              {bet.type}
-            </p>
-
-            <p className="text-zinc-500 text-sm">
-              {bet.value}
-            </p>
-
-          </div>
-
-          <div className="text-right">
-
-            <p className="text-green-400 font-bold">
-              ₹{bet.amount}
-            </p>
-
-            <p className="text-zinc-500 text-sm">
-              Pending
-            </p>
-
-          </div>
-
-        </div>
-
-      ))}
-
-    </div>
-
-  )}
-
-</div>
-
-{/* Recent Results */}
-
-<div className="mt-6 bg-zinc-950 border border-zinc-800 rounded-3xl p-6">
-
-  <h2 className="text-2xl font-black mb-5">
-    Recent Results
-  </h2>
-
-  <div className="grid grid-cols-5 gap-3">
-
-    {results.map((item, index) => (
-      <div
-        key={index}
-        className="bg-black border border-zinc-800 rounded-xl p-3 text-center"
-      >
-        <div className="text-2xl font-black">
-          {item.number}
-        </div>
-
-        <div
-          className={`mt-2 h-3 rounded-full ${
-            item.color === "GREEN"
-              ? "bg-green-500"
-              : item.color === "RED"
-              ? "bg-red-500"
-              : "bg-purple-500"
-          }`}
-        />
       </div>
-    ))}
-
-  </div>
-
-</div>
-
-</div>
-
-</main>
-);
+    </main>
+  );
 }
