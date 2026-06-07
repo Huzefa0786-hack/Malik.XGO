@@ -1,80 +1,36 @@
-const express =
-  require("express");
+import express from "express";
 
-const router =
-  express.Router();
+const router = express.Router();
 
-const GameControl =
-  require(
-    "../models/GameControl"
-  );
+let gameState = {
+  gameStatus: "ACTIVE", // ACTIVE, PAUSED, STOPPED
+  currentRound: "round-1",
+  roundStartTime: new Date(),
+  roundEndTime: new Date(Date.now() + 30000),
+  timer: 30
+};
 
-// GET CONTROL
-router.get(
-  "/",
-  async (
-    req,
-    res
-  ) => {
+// Get game control state
+router.get("/", (req, res) => {
+  res.json(gameState);
+});
 
-    let control =
-      await GameControl.findOne();
+// Update game state (admin only - add middleware later)
+router.post("/update", (req, res) => {
+  const { gameStatus, timer } = req.body;
+  if (gameStatus) gameState.gameStatus = gameStatus;
+  if (timer) gameState.timer = timer;
+  res.json({ success: true, gameState });
+});
 
-    if (!control) {
+// Start new round
+router.post("/new-round", (req, res) => {
+  const roundNumber = parseInt(gameState.currentRound.split("-")[1]) + 1;
+  gameState.currentRound = `round-${roundNumber}`;
+  gameState.roundStartTime = new Date();
+  gameState.roundEndTime = new Date(Date.now() + 30000);
+  gameState.timer = 30;
+  res.json({ success: true, round: gameState.currentRound });
+});
 
-      control =
-        await GameControl.create(
-          {}
-        );
-
-    }
-
-    res.json(control);
-
-  }
-);
-
-// UPDATE CONTROL
-router.put(
-  "/",
-  async (
-    req,
-    res
-  ) => {
-
-    let control =
-      await GameControl.findOne();
-
-    if (!control) {
-
-      control =
-        await GameControl.create(
-          {}
-        );
-
-    }
-
-    control.numcards =
-      req.body.numcards;
-
-    control.spin =
-      req.body.spin;
-
-    control.sky =
-      req.body.sky;
-
-    control.rtp =
-      req.body.rtp;
-
-    control.gameStatus =
-      req.body.gameStatus;
-
-    await control.save();
-
-    res.json(control);
-
-  }
-);
-
-module.exports =
-  router;
+export default router;
