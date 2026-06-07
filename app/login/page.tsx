@@ -31,6 +31,8 @@ export default function LoginPage() {
       alert("Login Successful");
       router.push("/");
     } catch (err: any) {
+      const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
+router.push(redirectTo);
       alert(err?.response?.data?.error || "Login Failed");
     } finally {
       setLoading(false);

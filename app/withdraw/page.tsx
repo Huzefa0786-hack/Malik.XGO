@@ -1,317 +1,151 @@
 "use client";
 
-import Link from "next/link";
-import axios from "axios";
-
-import {
-  ArrowLeft,
-  Wallet,
-  IndianRupee,
-  Landmark,
-  CheckCircle2,
-} from "lucide-react";
-
 import { useState, useEffect } from "react";
-
-import toast from "react-hot-toast";
-
-type UserType = {
-  username: string;
-  email: string;
-  wallet: number;
-};
+import { useRouter } from "next/navigation";
+import axios from "axios";
+import { ArrowLeft, Wallet, Copy, Check } from "lucide-react";
 
 export default function WithdrawPage() {
+  const router = useRouter();
   const [amount, setAmount] = useState("");
-
-  const [upi, setUpi] = useState("");
-
-  const [user, setUser] = useState<UserType | null>(
-    null
-  );
+  const [upiId, setUpiId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-
-  const loadUser = async () => {
-
-    const storedUser =
-      localStorage.getItem(
-        "user"
-      );
-
-    if (storedUser) {
-
-      const parsedUser =
-        JSON.parse(
-          storedUser
-        );
-
-      setTimeout(() => {
-
-        setUser(
-          parsedUser
-        );
-
-      }, 0);
-
+    const token = localStorage.getItem("token");
+    const userData = localStorage.getItem("user");
+    
+    if (!token || !userData) {
+      router.push("/login");
+      return;
     }
-
-  };
-
-  loadUser();
-
-}, []);
+    
+    setUser(JSON.parse(userData));
+    
+    // Load saved UPI ID if exists
+    const savedUpi = localStorage.getItem("upiId");
+    if (savedUpi) setUpiId(savedUpi);
+  }, [router]);
 
   const handleWithdraw = async () => {
-  try {
-    if (!amount || !upi) {
-      return toast.error(
-        "Fill all fields"
-      );
+    const withdrawAmount = parseFloat(amount);
+    
+    if (!amount || withdrawAmount < 500) {
+      alert("Minimum withdrawal amount is ₹500");
+      return;
     }
-
-    if (Number(amount) < 100) {
-      return toast.error(
-        "Minimum withdraw is ₹100"
-      );
+    
+    if (!upiId) {
+      alert("Please enter your UPI ID");
+      return;
     }
-
-    if (
-      Number(amount) >
-      (user?.wallet || 0)
-    ) {
-      return toast.error(
-        "Insufficient balance"
-      );
+    
+    if (user?.wallet < withdrawAmount) {
+      alert("Insufficient balance");
+      return;
     }
-
-    await axios.post(
-      "http://localhost:5000/api/withdraw",
-      {
-        userId: user?.email,
-        username: user?.username,
-        amount,
-        upiId: upi,
+    
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      
+      const response = await axios.post(
+        "http://localhost:5000/api/wallet/withdraw",
+        { amount: withdrawAmount, upiId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data.success) {
+        alert(response.data.message);
+        localStorage.setItem("upiId", upiId);
+        // Update local user data
+        const updatedUser = { ...user, wallet: response.data.newBalance };
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        router.push("/");
       }
-    );
+    } catch (err: any) {
+      alert(err.response?.data?.error || "Withdrawal failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    toast.success(
-      "Withdraw request submitted"
-    );
+  const copyUpiId = () => {
+    navigator.clipboard.writeText(upiId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
-    setAmount("");
-
-    setUpi("");
-  } catch (_error) {
-    toast.error("Withdraw failed");
-  }
-};
   return (
-
-  <main className="min-h-screen bg-black text-white overflow-x-hidden">
-      <div className="container mx-auto px-4 py-10">
-
-        {/* Back */}
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-zinc-400 hover:text-white transition mb-8"
-        >
-          <ArrowLeft size={20} />
-          Back
-        </Link>
-
-        {/* Heading */}
-        <div className="mb-10">
-          <h1 className="text-5xl font-black text-green-400">
-            Withdraw Funds
-          </h1>
-
-          <p className="text-zinc-500 mt-3 text-lg">
-            Withdraw winnings directly to
-            your UPI account
-          </p>
-        </div>
-
-        {/* Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-14">
-          {/* Left */}
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8">
-            {/* Top */}
-            <div className="flex items-center gap-4 mb-8">
-              <div className="bg-green-500/10 p-4 rounded-2xl">
-                <Wallet
-                  className="text-green-400"
-                  size={32}
-                />
-              </div>
-
-              <div>
-                <h2 className="text-3xl font-black">
-                  Withdraw
-                </h2>
-
-                <p className="text-zinc-500">
-                  Instant payout request
-                </p>
-              </div>
-            </div>
-
-            {/* Wallet */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 mb-8">
-              <p className="text-zinc-500 text-sm mb-2">
-                Available Balance
-              </p>
-
-              <h2 className="text-5xl font-black text-green-400">
-                ₹{user?.wallet || 0}
-              </h2>
-            </div>
-
-            {/* Amount */}
-            <div className="mb-6">
-              <label className="text-zinc-400 text-sm block mb-3">
-                Withdraw Amount
-              </label>
-
-              <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-2xl px-5">
-                <IndianRupee
-                  size={24}
-                  className="text-green-400"
-                />
-
-                <input
-                  type="number"
-                  placeholder="500"
-                  value={amount}
-                  onChange={(e) =>
-                    setAmount(e.target.value)
-                  }
-                  className="w-full bg-transparent outline-none px-3 py-5 text-2xl font-bold"
-                />
-              </div>
-            </div>
-
-            {/* UPI */}
-            <div className="mb-8">
-              <label className="text-zinc-400 text-sm block mb-3">
-                UPI ID
-              </label>
-
-              <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-2xl px-5">
-                <Landmark
-                  size={22}
-                  className="text-green-400"
-                />
-
-                <input
-                  type="text"
-                  placeholder="yourupi@paytm"
-                  value={upi}
-                  onChange={(e) =>
-                    setUpi(e.target.value)
-                  }
-                  className="w-full bg-transparent outline-none px-3 py-5 text-lg"
-                />
-              </div>
-            </div>
-
-            {/* Quick Amounts */}
-            <div className="d grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-10">
-              {[100, 500, 1000, 5000].map(
-                (amt) => (
-                  <button
-                    key={amt}
-                    onClick={() =>
-                      setAmount(String(amt))
-                    }
-                    className="bg-zinc-900 border border-zinc-800 hover:border-green-500 rounded-2xl py-4 transition font-bold"
-                  >
-                    ₹{amt}
-                  </button>
-                )
-              )}
-            </div>
-
-            {/* Button */}
-            <button
-              onClick={handleWithdraw}
-              className="w-full bg-green-600 hover:bg-green-500 transition rounded-2xl py-5 text-xl font-black"
-            >
-              Withdraw Now
-            </button>
+    <main className="min-h-screen bg-black text-white">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <button onClick={() => router.back()} className="flex items-center gap-2 text-zinc-400 mb-6">
+          <ArrowLeft size={20} /> Back
+        </button>
+        
+        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
+          <div className="text-center mb-8">
+            <Wallet size={48} className="text-green-400 mx-auto mb-4" />
+            <h1 className="text-4xl font-black mb-2">Withdraw Funds</h1>
+            <p className="text-zinc-400">Instant withdrawal to your bank account</p>
           </div>
-
-          {/* Right */}
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8">
-            <h2 className="text-3xl font-black mb-8">
-              Withdrawal Info
-            </h2>
-
-            {/* Rules */}
-            <div className="space-y-5">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="text-green-400 mt-1" />
-
-                  <div>
-                    <h3 className="font-bold mb-1">
-                      Minimum Withdraw
-                    </h3>
-
-                    <p className="text-zinc-500 text-sm">
-                      Minimum withdrawal amount
-                      is ₹100.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="text-green-400 mt-1" />
-
-                  <div>
-                    <h3 className="font-bold mb-1">
-                      Processing Time
-                    </h3>
-
-                    <p className="text-zinc-500 text-sm">
-                      Withdrawals are processed
-                      within 5-30 minutes.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="text-green-400 mt-1" />
-
-                  <div>
-                    <h3 className="font-bold mb-1">
-                      Secure Payouts
-                    </h3>
-
-                    <p className="text-zinc-500 text-sm">
-                      All transactions are
-                      encrypted and verified
-                      securely.
-                    </p>
-                  </div>
-                </div>
-              </div>
+          
+          <div className="bg-zinc-950 rounded-2xl p-6 mb-6">
+            <div className="flex justify-between items-center">
+              <span className="text-zinc-400">Available Balance</span>
+              <span className="text-3xl font-bold text-green-400">₹{user?.wallet?.toLocaleString() || 0}</span>
             </div>
-
-            {/* Status */}
-            <div className="mt-8 bg-green-500/10 border border-green-500/20 rounded-2xl p-5">
-              <h3 className="text-green-400 font-bold text-lg mb-2">
-                Withdrawal Status
-              </h3>
-
-              <p className="text-zinc-300">
-                No pending withdrawal requests
-              </p>
+          </div>
+          
+          <div className="mb-6">
+            <label className="block text-zinc-400 mb-2">Enter Amount (₹)</label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Min ₹500"
+              className="w-full bg-zinc-950 border border-zinc-700 rounded-2xl p-4 text-white text-2xl font-bold outline-none focus:border-green-500"
+            />
+            <p className="text-zinc-500 text-sm mt-2">Max withdrawal: ₹50,000 per transaction</p>
+          </div>
+          
+          <div className="mb-6">
+            <label className="block text-zinc-400 mb-2">UPI ID / Bank Account</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={upiId}
+                onChange={(e) => setUpiId(e.target.value)}
+                placeholder="example@okhdfcbank"
+                className="flex-1 bg-zinc-950 border border-zinc-700 rounded-2xl p-4 outline-none focus:border-green-500"
+              />
+              <button
+                onClick={copyUpiId}
+                className="bg-zinc-800 px-4 rounded-2xl hover:bg-zinc-700 transition-colors"
+              >
+                {copied ? <Check size={24} className="text-green-500" /> : <Copy size={24} />}
+              </button>
             </div>
+          </div>
+          
+          <button
+            onClick={handleWithdraw}
+            disabled={loading || !amount || !upiId}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-900 disabled:cursor-not-allowed text-white font-black py-4 rounded-2xl text-xl transition-colors"
+          >
+            {loading ? "PROCESSING..." : `WITHDRAW ₹${amount || 0}`}
+          </button>
+          
+          <div className="mt-6 p-4 bg-zinc-950 rounded-2xl">
+            <h3 className="font-bold mb-2">Withdrawal Rules:</h3>
+            <ul className="text-sm text-zinc-400 space-y-1">
+              <li>• Minimum withdrawal: ₹500</li>
+              <li>• Maximum withdrawal: ₹50,000 per transaction</li>
+              <li>• Processing time: Instant for UPI, 2-4 hours for banks</li>
+              <li>• No withdrawal fees</li>
+            </ul>
           </div>
         </div>
       </div>
