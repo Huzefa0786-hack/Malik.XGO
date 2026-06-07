@@ -41,18 +41,20 @@ router.post("/register", async (req, res) => {
     await user.save();
 
     // ADD THIS TOKEN GENERATION
-    const token = jwt.sign(
-      { id: user._id, uid: user.uid },
-      process.env.JWT_SECRET,
-      { expiresIn: "30d" }
-    );
+    // Generate token for new user
+const token = jwt.sign(
+  { id: user._id, uid: user.uid },
+  process.env.JWT_SECRET,
+  { expiresIn: "30d" }
+);
 
-    res.json({
-      success: true,
-      message: "Registration successful",
-      token,  // Include token here
-      user,
-    });
+// Then include token in response
+res.json({
+  success: true,
+  message: "Registration successful",
+  token,  // ← Add this line
+  user,
+});
 
   } catch (err) {
     console.log("REGISTER ERROR:", err);
