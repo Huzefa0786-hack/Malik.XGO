@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
+import api from "../lib/api";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BetHistory from "../components/BetHistory";

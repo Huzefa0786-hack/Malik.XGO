@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import axios from "axios";
+import api from "../lib/api"; // ✅ Changed to use api utility
 import { io } from "socket.io-client";
 import BetHistory from "../components/BetHistory";
 
@@ -15,13 +15,11 @@ import {
   History,
   TrendingUp,
   Award,
-  Clock,
-  RefreshCw
 } from "lucide-react";
 
 const socket = io("http://localhost:5000");
 
-interface BetHistory {
+interface BetHistoryItem {
   _id: string;
   selection: number;
   amount: number;
@@ -41,7 +39,7 @@ export default function NumCardsPage() {
   const [wallet, setWallet] = useState(0);
   const [lastResult, setLastResult] = useState<number | null>(null);
   const [liveBets, setLiveBets] = useState<any[]>([]);
-  const [betHistory, setBetHistory] = useState<BetHistory[]>([]);
+  const [betHistory, setBetHistory] = useState<BetHistoryItem[]>([]);
   const [control, setControl] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [roundId, setRoundId] = useState<string>("round-1");
@@ -67,16 +65,15 @@ export default function NumCardsPage() {
       }
 
       try {
-        const response = await axios.get("http://localhost:5000/api/auth/profile", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // ✅ Using api utility
+        const response = await api.get("/auth/profile");
 
         if (response.data.success) {
           const parsedUser = JSON.parse(userData);
           setUser(parsedUser);
           setWallet(parsedUser.wallet || 0);
           setIsAuthenticated(true);
-          fetchBetHistory(token);
+          fetchBetHistory();
         }
       } catch (error) {
         console.error("Auth verification failed:", error);
@@ -91,12 +88,10 @@ export default function NumCardsPage() {
     checkAuth();
   }, [router]);
 
-  // Fetch bet history
-  const fetchBetHistory = async (token: string) => {
+  // Fetch bet history - ✅ Using api utility
+  const fetchBetHistory = async () => {
     try {
-      const response = await axios.get("http://localhost:5000/api/bet/history?game=numcards", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get("/bet/history?game=numcards");
       
       if (response.data.success) {
         setBetHistory(response.data.bets);
@@ -115,7 +110,7 @@ export default function NumCardsPage() {
 
     const fetchControl = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/control");
+        const res = await api.get("/control");
         setControl(res.data);
         if (res.data.currentRound) {
           setRoundId(res.data.currentRound);
@@ -143,26 +138,19 @@ export default function NumCardsPage() {
     socket.on("result_update", async (result) => {
       setLastResult(result);
       
-      // Check if user's bet won
       if (currentBetId && selectedNumber && result.toString() === selectedNumber) {
         const winAmount = parseInt(betAmount) * multiplier;
         setLastWin(winAmount);
         
-        // Update bet result
-        const token = localStorage.getItem("token");
+        // ✅ Using api utility
         try {
-          await axios.post(
-            "http://localhost:5000/api/bet/cashout",
-            {
-              betId: currentBetId,
-              winAmount: winAmount,
-              result: result.toString(),
-              multiplier: multiplier
-            },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+          await api.post("/bet/cashout", {
+            betId: currentBetId,
+            winAmount: winAmount,
+            result: result.toString(),
+            multiplier: multiplier
+          });
           
-          // Refresh wallet and history
           const userData = localStorage.getItem("user");
           if (userData) {
             const parsed = JSON.parse(userData);
@@ -174,19 +162,14 @@ export default function NumCardsPage() {
           console.error("Failed to update win:", error);
         }
       } else if (currentBetId) {
-        // Lost bet
-        const token = localStorage.getItem("token");
+        // ✅ Using api utility
         try {
-          await axios.post(
-            "http://localhost:5000/api/bet/cashout",
-            {
-              betId: currentBetId,
-              winAmount: 0,
-              result: result.toString(),
-              multiplier: 0
-            },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+          await api.post("/bet/cashout", {
+            betId: currentBetId,
+            winAmount: 0,
+            result: result.toString(),
+            multiplier: 0
+          });
           setHistoryRefresh(prev => prev + 1);
           setCurrentBetId(null);
         } catch (error) {
@@ -218,7 +201,7 @@ export default function NumCardsPage() {
     };
   }, [isAuthenticated, user, selectedNumber, betAmount, multiplier, currentBetId]);
 
-  // PLACE BET
+  // PLACE BET - ✅ Using api utility
   const placeBet = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -245,22 +228,16 @@ export default function NumCardsPage() {
         return alert("❌ Betting is currently paused");
       }
 
-      const response = await axios.post(
-        "http://localhost:5000/api/bet/place",
-        {
-          game: "numcards",
-          amount: parseInt(betAmount),
-          selection: selectedNumber,
-          betType: "number",
-          multiplier: multiplier,
-          roundId: roundId
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+      // ✅ Using api utility - no need to manually add headers
+      const response = await api.post("/bet/place", {
+        game: "numcards",
+        amount: parseInt(betAmount),
+        selection: selectedNumber,
+        betType: "number",
+        multiplier: multiplier,
+        roundId: roundId
+      });
       
-      // Update wallet
       setWallet(response.data.wallet);
       setCurrentBetId(response.data.betId);
       
@@ -268,10 +245,8 @@ export default function NumCardsPage() {
       localStorage.setItem("user", JSON.stringify(updatedUser));
       setUser(updatedUser);
       
-      // Refresh history
       setHistoryRefresh(prev => prev + 1);
       
-      // Emit live bet
       socket.emit("place_bet", {
         userName: user.name,
         selection: selectedNumber,
@@ -367,7 +342,7 @@ export default function NumCardsPage() {
           </div>
           
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-            <div className="flex items-center gap-2 text-blue-400 mb-2">
+            <div className="flex items-center gap-2 text-green-400 mb-2">
               <Wallet size={20} />
               <span className="text-sm">Balance</span>
             </div>
@@ -483,7 +458,7 @@ export default function NumCardsPage() {
               Live Bets
             </h3>
             
-            <div className="space-y-3 max-h-150 overflow-y-auto">
+            <div className="space-y-3 max-h-96 overflow-y-auto">
               {liveBets.length === 0 ? (
                 <p className="text-zinc-500 text-center py-8">No live bets yet</p>
               ) : (

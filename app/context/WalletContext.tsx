@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import axios from "axios";
 
 interface WalletContextType {
@@ -12,7 +12,7 @@ interface WalletContextType {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-export function WalletProvider({ children }: { children: React.ReactNode }) {
+export function WalletProvider({ children }: { children: ReactNode }) {
   const [wallet, setWallet] = useState(0);
 
   const loadWallet = async () => {
@@ -42,6 +42,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setWallet(response.data.wallet);
+      
+      // Also update user object in localStorage
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        user.wallet = response.data.wallet;
+        localStorage.setItem("user", JSON.stringify(user));
+      }
+      
       return true;
     } catch (error) {
       console.error("Failed to update wallet:", error);
@@ -63,7 +72,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 export function useWallet() {
   const context = useContext(WalletContext);
   if (!context) {
-    throw new Error("useWallet must be used within a WalletProvider");
+    throw new Error("useWallet must be used within WalletProvider");
   }
   return context;
 }

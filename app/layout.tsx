@@ -1,22 +1,25 @@
+import type { Metadata } from "next";
+// Ignore missing type declarations for global CSS side-effect import in this environment
+// @ts-ignore
 import "./globals.css";
-import React from "react";
+import { Providers } from "./providers";
 
-// Fallback/local WalletProvider to avoid missing module during development
-const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return <>{children}</>;
+export const metadata: Metadata = {
+  title: "Malik.XGO - Premium Gaming Platform",
+  description: "Play, win and enjoy premium gaming experience with instant deposits and withdrawals",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="en">
-      <body>
-        <WalletProvider>
+      <body className="bg-black text-white">
+        <Providers>
           {children}
-        </WalletProvider>
+        </Providers>
       </body>
     </html>
   );
