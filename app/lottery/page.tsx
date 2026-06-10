@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BetHistory from "../components/BetHistory";
 import { ArrowLeft, Wallet, Trophy, Ticket, Clock, Users, History, TrendingUp } from "lucide-react";
+import { useGame } from "../context/GameContext";
 
 export default function LotteryPage() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function LotteryPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [stats, setStats] = useState({ totalWins: 0, totalLosses: 0 });
+const { gameState, socket } = useGame();
 
   useEffect(() => {
     const token = localStorage.getItem("token");

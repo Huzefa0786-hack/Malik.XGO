@@ -14,7 +14,8 @@ const BetSchema = new mongoose.Schema({
   winAmount: { type: Number, default: 0 },
   roundId: { type: String },
   status: { type: String, enum: ["pending", "completed", "cancelled"], default: "pending" },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  roundId: { type: String, default: "" }
 });
 
 // Index for faster queries

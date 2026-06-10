@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
-// Ignore missing type declarations for global CSS side-effect import in this environment
-// @ts-ignore
 import "./globals.css";
-import { Providers } from "./providers";
+import { GameProvider } from "./context/GameContext";
 
 export const metadata: Metadata = {
   title: "Malik.XGO - Premium Gaming Platform",
-  description: "Play, win and enjoy premium gaming experience with instant deposits and withdrawals",
+  description: "Play, win and enjoy premium gaming experience",
 };
 
 export default function RootLayout({
@@ -17,9 +15,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-black text-white">
-        <Providers>
+        <GameProvider>
           {children}
-        </Providers>
+        </GameProvider>
       </body>
     </html>
   );

@@ -1,0 +1,53 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+    
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+    
+    - name: Install dependencies
+      run: |
+        cd mobile
+        npm install
+        npx cap add android
+        npm install -g @capacitor/cli
+    
+    - name: Build Next.js
+      run: |
+        npm install
+        npm run build
+    
+    - name: Build APK
+      run: |
+        cd mobile
+        npx cap sync
+        cd android
+        chmod +x gradlew
+        ./gradlew assembleRelease
+    
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: malik-xgo-apk
+        path: mobile/android/app/build/outputs/apk/release/*.apk

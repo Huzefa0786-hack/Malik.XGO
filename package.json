@@ -6,8 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
-  },
+    "lint": "next lint",
+    "build:apk": "cd mobile && node build-apk.js",
+    "build:apk:debug": "cd mobile && ./build-apk.sh debug",
+    "build:apk:release": "cd mobile && ./build-apk.sh release",
+    "setup:mobile": "cd mobile && npm install && npx cap add android",
+    "open:android": "cd mobile && npx cap open android"
+  }
+  ,
   "dependencies": {
     "axios": "^1.6.2",
     "framer-motion": "^10.16.4",

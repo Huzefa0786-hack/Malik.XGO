@@ -6,6 +6,8 @@ import api from "../lib/api";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BetHistory from "../components/BetHistory";
+import { useGame } from "../context/GameContext";
+
 import { 
   ArrowLeft, 
   Wallet, 
@@ -44,6 +46,7 @@ export default function ColorTradePage() {
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [currentBetId, setCurrentBetId] = useState<string | null>(null);
   const [stats, setStats] = useState({ totalWins: 0, totalLosses: 0 });
+const { gameState, socket } = useGame();
 
   // Colors and multipliers
   const colorOptions = [

@@ -1,0 +1,31 @@
+{
+  "name": "malik-xgo-app",
+  "version": "1.0.0",
+  "description": "Malik.XGO - Premium Gaming Platform",
+  "main": "index.js",
+  "scripts": {
+    "build": "npm run build:web && npm run sync",
+    "build:web": "cd .. && npm run build",
+    "sync": "npx cap sync",
+    "open:android": "npx cap open android",
+    "build:apk": "npm run sync && cd android && ./gradlew assembleDebug",
+    "build:release": "npm run sync && cd android && ./gradlew assembleRelease",
+    "add:android": "npx cap add android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^5.7.8",
+    "@capacitor/app": "^5.0.0",
+    "@capacitor/core": "^5.7.8",
+    "@capacitor/filesystem": "^5.0.0",
+    "@capacitor/haptics": "^5.0.0",
+    "@capacitor/keyboard": "^5.0.0",
+    "@capacitor/status-bar": "^5.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^5.7.8"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

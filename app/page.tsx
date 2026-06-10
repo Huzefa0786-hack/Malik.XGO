@@ -14,6 +14,8 @@ import {
   Shield,
   Bell,
   Menu,
+  Smartphone,
+  TrendingDown,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import axios from "axios";
@@ -263,21 +265,40 @@ export default function HomePage() {
         </div>
 
         {/* DOWNLOAD APP BANNER */}
-        <div className="bg-green-500 text-black rounded-3xl p-8 mb-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div>
-              <h2 className="text-3xl font-black mb-2">Download Malik.XGO App</h2>
-              <p className="font-semibold">
-                Faster gameplay, instant notifications and better rewards.
-              </p>
-            </div>
+        // Replace your existing download banner with this:
 
-            <button className="bg-black text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 hover:bg-zinc-900 transition-colors">
-              <Download size={20} />
-              DOWNLOAD NOW
-            </button>
-          </div>
-        </div>
+<div className="bg-linear-to-r from-green-500 to-green-600 text-black rounded-3xl p-8 mb-6">
+  <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+    <div>
+      <h2 className="text-3xl font-black mb-2">Download Malik.XGO App</h2>
+      <p className="font-semibold">
+        Faster gameplay, instant notifications and better rewards.
+      </p>
+      <div className="flex gap-3 mt-4">
+        <Link
+          href="/download"
+          className="bg-white text-black px-6 py-3 rounded-xl font-black flex items-center gap-2 hover:bg-zinc-900 transition"
+        >
+          <Download size={20} />
+          DOWNLOAD FOR ANDROID
+        </Link>
+        <Link
+          href="/download#ios"
+          className="bg-white/20 backdrop-blur text-black px-6 py-3 rounded-xl font-black flex items-center gap-2 hover:bg-white/30 transition"
+        >
+          <Smartphone size={20} />
+          COMING SOON iOS
+        </Link>
+      </div>
+    </div>
+    <div className="text-center">
+      <div className="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-2">
+        <span className="text-4xl">📱</span>
+      </div>
+      <p className="text-sm font-bold">v1.0.0</p>
+    </div>
+  </div>
+</div>
 
         {/* ANNOUNCEMENT BAR */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-6 flex items-center gap-3 overflow-x-auto">
@@ -319,24 +340,6 @@ export default function HomePage() {
   </div>
 </Link>
 
-            {/* NUMCARDS */}
-            <Link href="/numcards">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden hover:border-green-500 transition-all cursor-pointer group">
-                <div className="h-40 bg-green-500 flex items-center justify-center group-hover:scale-105 transition-transform">
-                  <span className="text-6xl font-black text-black">🏆</span>
-                </div>
-                <div className="p-6">
-                  <h3 className="text-3xl font-black mb-2">NumCards</h3>
-                  <p className="text-zinc-400 mb-4">
-                    Predict numbers and win huge multipliers.
-                  </p>
-                  <button className="w-full bg-green-500 text-black font-black py-3 rounded-xl hover:bg-green-600 transition-colors">
-                    PLAY NOW
-                  </button>
-                </div>
-              </div>
-            </Link>
-
             {/* MINES */}
             <Link href="/mines">
               <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden hover:border-green-500 transition-all cursor-pointer group">
@@ -372,7 +375,29 @@ export default function HomePage() {
                 </div>
               </div>
             </Link>
-
+{/* TRAGING */}
+<Link href="/trading">
+  <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden hover:border-green-500 transition-all cursor-pointer group">
+    <div className="h-40 bg-linear-to-r from-blue-600 to-green-600 flex items-center justify-center">
+      <div className="flex gap-2">
+        <TrendingUp size={48} className="text-white" />
+        <TrendingDown size={48} className="text-white" />
+      </div>
+    </div>
+    <div className="p-6">
+      <h3 className="text-3xl font-black mb-2">Binary Trading</h3>
+      <p className="text-zinc-400 mb-4">Trade like Quotex & Pocket Option. Predict price movements!</p>
+      <div className="flex gap-2 mb-4">
+        <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded-lg text-xs">CALL/PUT</span>
+        <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded-lg text-xs">1.8x-2.5x</span>
+        <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-lg text-xs">Real-time</span>
+      </div>
+      <button className="w-full bg-green-500 text-black font-black py-3 rounded-xl hover:bg-green-600 transition">
+        START TRADING
+      </button>
+    </div>
+  </div>
+</Link>
             {/* SPIN */}
             <Link href="/spin">
               <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden hover:border-green-500 transition-all cursor-pointer group">
@@ -408,7 +433,31 @@ export default function HomePage() {
                 </div>
               </div>
             </Link>
-
+{/* CARD-GAME */}
+<Link href="/card-game">
+  <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden hover:border-green-500 transition-all cursor-pointer group">
+    <div className="h-40 bg-linear-to-r from-red-600 to-gray-800 flex items-center justify-center">
+      <div className="flex gap-2">
+        <span className="text-5xl">♠</span>
+        <span className="text-5xl text-red-500">♥</span>
+        <span className="text-5xl text-red-500">♦</span>
+        <span className="text-5xl">♣</span>
+      </div>
+    </div>
+    <div className="p-6">
+      <h3 className="text-3xl font-black mb-2">Card Game</h3>
+      <p className="text-zinc-400 mb-4">Predict suits & numbers. Win up to 35x your bet!</p>
+      <div className="flex gap-2 mb-4">
+        <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded-lg text-xs">Exact: 35x</span>
+        <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded-lg text-xs">Suit: 3x</span>
+        <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-lg text-xs">Number: 2x</span>
+      </div>
+      <button className="w-full bg-green-500 text-black font-black py-3 rounded-xl hover:bg-green-600 transition">
+        PLAY NOW
+      </button>
+    </div>
+  </div>
+</Link>
             {/* PLINKO */}
             <Link href="/plinko">
               <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden hover:border-green-500 transition-all cursor-pointer group">
@@ -428,6 +477,9 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
+
+
+
 
         {/* LIVE WINNERS & REFERRAL SECTION */}
         <div className="grid lg:grid-cols-3 gap-6 mb-8">

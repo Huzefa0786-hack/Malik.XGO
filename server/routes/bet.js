@@ -19,6 +19,7 @@ const verifyToken = (req, res, next) => {
 
 // Place bet
 router.post("/place", verifyToken, async (req, res) => {
+  roundId: req.body.roundId || `round-${Date.now()}`
   try {
     const { game, amount, selection, betType, multiplier, roundId } = req.body;
     
@@ -55,7 +56,7 @@ router.post("/place", verifyToken, async (req, res) => {
       betId: bet._id,
       message: "Bet placed successfully"
     });
-    
+    res.json({ success: true, wallet: user.wallet, betId: bet._id, roundId: bet.roundId });
   } catch (err) {
     console.error("Place bet error:", err);
     res.status(500).json({ error: err.message });
