@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import axios from "axios";
+import api from "../lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,14 +13,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  // Check if already logged in
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      router.push(redirectTo);
-    }
-  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,32 +26,22 @@ export default function LoginPage() {
     try {
       setLoading(true);
       
-      const res = await axios.post("http://localhost:5000/api/auth/login", {
-        email,
-        password
-      });
-      
-      console.log("Login response:", res.data);
+      const res = await api.post("/auth/login", { email, password });
       
       if (res.data.token) {
-        // Save to localStorage
         localStorage.setItem("token", res.data.token);
         localStorage.setItem("user", JSON.stringify(res.data.user));
         localStorage.setItem("loggedIn", "true");
         
-        // Verify token was saved
-        const savedToken = localStorage.getItem("token");
-        console.log("Token saved:", savedToken ? "Yes" : "No");
-        
         alert("Login Successful!");
         router.push(redirectTo);
       } else {
-        setError("No token received from server");
+        setError("No token received");
       }
       
     } catch (err: any) {
       console.error("Login error:", err);
-      setError(err.response?.data?.error || "Login Failed. Please check your credentials.");
+      setError(err.response?.data?.error || "Login Failed");
     } finally {
       setLoading(false);
     }
@@ -68,9 +50,13 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-black flex items-center justify-center px-6">
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-        <h1 className="text-4xl font-black text-green-400 text-center mb-8">
-          MALIK.XGO LOGIN
-        </h1>
+        <h1 className="text-4xl font-black text-green-400 text-center mb-8">Malik.XGO LOGIN</h1>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-xl text-red-400 text-center text-sm">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleLogin}>
           <input
@@ -90,12 +76,6 @@ export default function LoginPage() {
             className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-white focus:border-green-500 outline-none mb-6"
             required
           />
-
-          {error && (
-            <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-xl text-red-400 text-center">
-              {error}
-            </div>
-          )}
 
           <button
             type="submit"

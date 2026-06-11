@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
-import { io } from "socket.io-client";
-import {
+import { 
   Users,
   Wallet,
   TrendingUp,
@@ -26,8 +25,6 @@ import {
   Award,
   Zap
 } from "lucide-react";
-
-const socket = io("http://localhost:5000");
 
 type UserType = {
   _id: string;
@@ -92,6 +89,7 @@ export default function AdminPage() {
   const [totalBets, setTotalBets] = useState(0);
   const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -101,8 +99,15 @@ export default function AdminPage() {
     totalBets: 0,
   });
 
+  // Fix hydration by only rendering after mount
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Load initial data
   useEffect(() => {
+    if (!isMounted) return;
+    
     loadData();
     
     const interval = setInterval(() => {
@@ -126,7 +131,7 @@ export default function AdminPage() {
       ]);
 
       setActivity((prev) => [
-        `${player} placed ₹${amount} on ${game}`,
+        `${player} placed ₹${amount.toLocaleString('en-IN')} on ${game}`,
         ...prev.slice(0, 8),
       ]);
       
@@ -138,15 +143,15 @@ export default function AdminPage() {
       clearInterval(timerInterval);
       clearInterval(liveBetsInterval);
     };
-  }, []);
+  }, [isMounted]);
 
   const loadData = async () => {
     try {
       const [usersRes, depRes, wdRes, controlRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/auth/users"),
-        axios.get("http://localhost:5000/api/deposit"),
-        axios.get("http://localhost:5000/api/withdraw"),
-        axios.get("http://localhost:5000/api/control"),
+        axios.get("http://localhost:5001/api/auth/users"),
+        axios.get("http://localhost:5001/api/deposit"),
+        axios.get("http://localhost:5001/api/withdraw"),
+        axios.get("http://localhost:5001/api/control"),
       ]);
 
       setUsers(usersRes.data);
@@ -170,7 +175,7 @@ export default function AdminPage() {
 
   const approveDeposit = async (id: string) => {
     try {
-      await axios.put(`http://localhost:5000/api/deposit/approve/${id}`);
+      await axios.put(`http://localhost:5001/api/deposit/approve/${id}`);
       setDeposits(deposits.filter((d) => d._id !== id));
       loadData();
       alert("Deposit approved!");
@@ -181,7 +186,7 @@ export default function AdminPage() {
 
   const approveWithdraw = async (id: string) => {
     try {
-      await axios.put(`http://localhost:5000/api/withdraw/approve/${id}`);
+      await axios.put(`http://localhost:5001/api/withdraw/approve/${id}`);
       setWithdraws(withdraws.filter((w) => w._id !== id));
       loadData();
       alert("Withdrawal approved!");
@@ -192,7 +197,7 @@ export default function AdminPage() {
 
   const toggleBan = async (id: string) => {
     try {
-      await axios.put(`http://localhost:5000/api/auth/ban/${id}`);
+      await axios.put(`http://localhost:5001/api/auth/ban/${id}`);
       setUsers(users.map((u) => (u._id === id ? { ...u, banned: !u.banned } : u)));
       alert("User ban status updated!");
     } catch (err) {
@@ -203,7 +208,7 @@ export default function AdminPage() {
   const deleteUser = async (id: string) => {
     if (confirm("Are you sure you want to delete this user?")) {
       try {
-        await axios.delete(`http://localhost:5000/api/auth/delete/${id}`);
+        await axios.delete(`http://localhost:5001/api/auth/delete/${id}`);
         setUsers(users.filter((u) => u._id !== id));
         alert("User deleted!");
       } catch (err) {
@@ -229,11 +234,11 @@ export default function AdminPage() {
         return;
       }
 
-      await axios.put(`http://localhost:5000/api/auth/wallet/${id}`, { wallet: newWallet });
+      await axios.put(`http://localhost:5001/api/auth/wallet/${id}`, { wallet: newWallet });
       
       setUsers(users.map((u) => (u._id === id ? { ...u, wallet: newWallet } : u)));
       setWalletAmount("");
-      alert(`₹${amount} ${type === "add" ? "added to" : "removed from"} wallet!`);
+      alert(`₹${amount.toLocaleString('en-IN')} ${type === "add" ? "added to" : "removed from"} wallet!`);
     } catch (err) {
       alert("Failed to update wallet");
     }
@@ -243,7 +248,7 @@ export default function AdminPage() {
     try {
       const newData = { ...control, ...updated };
       setControl(newData);
-      await axios.put("http://localhost:5000/api/control", newData);
+      await axios.put("http://localhost:5001/api/control", newData);
       alert("Settings saved!");
     } catch (error) {
       console.log(error);
@@ -255,7 +260,7 @@ export default function AdminPage() {
     if (!searchUid) return;
     
     try {
-      const res = await axios.get(`http://localhost:5000/api/wallet/${searchUid}`);
+      const res = await axios.get(`http://localhost:5001/api/wallet/${searchUid}`);
       setFoundUser(res.data);
       setSelectedUser(res.data);
       setShowUserModal(true);
@@ -266,12 +271,26 @@ export default function AdminPage() {
 
   const forceGameResult = async (game: string, result: string | number) => {
     try {
-      await axios.post("http://localhost:5000/api/admin/force-result", { game, result });
+      await axios.post("http://localhost:5001/api/admin/force-result", { game, result });
       alert(`${game} result forced to ${result}`);
     } catch (err) {
       alert("Failed to force result");
     }
   };
+
+  // Helper function to safely format numbers for SSR
+  const formatNumber = (num: number) => {
+    return num.toLocaleString('en-IN');
+  };
+
+  // Don't render until mounted to prevent hydration mismatch
+  if (!isMounted) {
+    return (
+      <main className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-500"></div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-black text-white flex">
@@ -282,8 +301,8 @@ export default function AdminPage() {
         ← Back
       </Link>
 
-      {/* Sidebar */}
-      <div className="w-72 bg-zinc-950 border-r border-zinc-800 p-6">
+      {/* Sidebar - hidden on mobile */}
+      <div className="hidden md:block w-72 bg-zinc-950 border-r border-zinc-800 p-6">
         <div className="text-center mb-10">
           <div className="w-24 h-24 rounded-full bg-linear-to-br from-green-500 to-green-700 mx-auto mb-4 flex items-center justify-center text-5xl">
             🎮
@@ -315,85 +334,108 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {/* Mobile Sidebar Selector */}
+      <div className="md:hidden fixed bottom-20 left-0 right-0 z-40 bg-zinc-950 border-t border-zinc-800 p-2">
+        <div className="flex justify-around">
+          {[
+            { id: "dashboard", label: "Home", icon: <BarChart3 size={18} /> },
+            { id: "users", label: "Users", icon: <Users size={18} /> },
+            { id: "deposits", label: "Deposits", icon: <TrendingUp size={18} /> },
+            { id: "withdraws", label: "Withdraw", icon: <TrendingDown size={18} /> },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setSection(item.id)}
+              className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition ${
+                section === item.id ? "text-green-400" : "text-zinc-500"
+              }`}
+            >
+              {item.icon}
+              <span className="text-xs">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Main Content */}
-      <div className="flex-1 p-10 overflow-y-auto">
+      <div className="flex-1 p-4 md:p-10 overflow-y-auto mb-16 md:mb-0">
         {/* Dashboard Section */}
         {section === "dashboard" && (
           <div>
-            <div className="flex items-center justify-between mb-10">
+            <div className="flex items-center justify-between mb-6 md:mb-10 flex-wrap gap-4">
               <div>
-                <h1 className="text-6xl font-black">Dashboard</h1>
-                <p className="text-zinc-500 mt-3 text-xl">Real Time Admin Control</p>
+                <h1 className="text-3xl md:text-6xl font-black">Dashboard</h1>
+                <p className="text-zinc-500 mt-2 text-sm md:text-xl">Real Time Admin Control</p>
               </div>
-              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl px-8 py-5 text-center">
-                <p className="text-zinc-500">Next Round</p>
-                <h1 className="text-5xl font-black text-green-400">{timer}s</h1>
-              </div>
-            </div>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
-                <Users className="text-green-400 mb-3" size={32} />
-                <p className="text-zinc-500">Total Users</p>
-                <h2 className="text-4xl font-black">{stats.totalUsers}</h2>
-                <p className="text-sm text-zinc-500 mt-2">Active: {stats.activeUsers}</p>
-              </div>
-              
-              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
-                <Activity className="text-yellow-400 mb-3" size={32} />
-                <p className="text-zinc-500">Live Bets</p>
-                <h2 className="text-4xl font-black">{liveBets.length}</h2>
-                <p className="text-sm text-zinc-500 mt-2">Today: {totalBets}</p>
-              </div>
-              
-              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
-                <DollarSign className="text-blue-400 mb-3" size={32} />
-                <p className="text-zinc-500">Today's Deposit</p>
-                <h2 className="text-4xl font-black text-green-400">₹{todayDeposit.toLocaleString()}</h2>
-              </div>
-              
-              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
-                <TrendingUp className="text-purple-400 mb-3" size={32} />
-                <p className="text-zinc-500">Profit</p>
-                <h2 className="text-4xl font-black text-green-400">₹{profit.toLocaleString()}</h2>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl md:rounded-3xl px-4 md:px-8 py-3 md:py-5 text-center">
+                <p className="text-zinc-500 text-xs md:text-sm">Next Round</p>
+                <h1 className="text-3xl md:text-5xl font-black text-green-400">{timer}s</h1>
               </div>
             </div>
 
-            {/* Live Bets */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 mb-10">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-3xl font-black flex items-center gap-2">
-                  <Zap className="text-yellow-400" />
+            {/* Stats Grid - Responsive */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-10">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-6">
+                <Users className="text-green-400 mb-2 md:mb-3" size={24} />
+                <p className="text-zinc-500 text-sm">Total Users</p>
+                <h2 className="text-2xl md:text-4xl font-black">{formatNumber(stats.totalUsers)}</h2>
+                <p className="text-xs text-zinc-500 mt-1 md:mt-2">Active: {formatNumber(stats.activeUsers)}</p>
+              </div>
+              
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-6">
+                <Activity className="text-yellow-400 mb-2 md:mb-3" size={24} />
+                <p className="text-zinc-500 text-sm">Live Bets</p>
+                <h2 className="text-2xl md:text-4xl font-black">{liveBets.length}</h2>
+                <p className="text-xs text-zinc-500 mt-1 md:mt-2">Today: {formatNumber(totalBets)}</p>
+              </div>
+              
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-6">
+                <DollarSign className="text-blue-400 mb-2 md:mb-3" size={24} />
+                <p className="text-zinc-500 text-sm">Today's Deposit</p>
+                <h2 className="text-2xl md:text-4xl font-black text-green-400">₹{formatNumber(todayDeposit)}</h2>
+              </div>
+              
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-6">
+                <TrendingUp className="text-purple-400 mb-2 md:mb-3" size={24} />
+                <p className="text-zinc-500 text-sm">Profit</p>
+                <h2 className="text-2xl md:text-4xl font-black text-green-400">₹{formatNumber(profit)}</h2>
+              </div>
+            </div>
+
+            {/* Live Bets - Responsive */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-8 mb-6 md:mb-10">
+              <div className="flex items-center justify-between mb-4 md:mb-6">
+                <h2 className="text-xl md:text-3xl font-black flex items-center gap-2">
+                  <Zap className="text-yellow-400" size={20} />
                   Live Bets
                 </h2>
-                <div className="bg-red-500 animate-pulse px-4 py-2 rounded-xl font-black text-sm">LIVE</div>
+                <div className="bg-red-500 animate-pulse px-3 md:px-4 py-1 md:py-2 rounded-xl font-black text-xs md:text-sm">LIVE</div>
               </div>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {liveBets.map((bet, index) => (
-                  <div key={index} className="bg-black border border-zinc-800 rounded-2xl p-4 flex items-center justify-between hover:border-green-500 transition">
+              <div className="space-y-2 md:space-y-3 max-h-96 overflow-y-auto">
+                {liveBets.slice(0, 10).map((bet, index) => (
+                  <div key={index} className="bg-black border border-zinc-800 rounded-xl p-3 md:p-4 flex items-center justify-between hover:border-green-500 transition">
                     <div>
-                      <p className="font-bold text-lg">{bet.user}</p>
-                      <p className="text-zinc-500 text-sm">{bet.game} • {bet.time}</p>
+                      <p className="font-bold text-sm md:text-lg">{bet.user}</p>
+                      <p className="text-zinc-500 text-xs md:text-sm">{bet.game} • {bet.time}</p>
                     </div>
-                    <p className="text-green-400 text-2xl font-bold">₹{bet.amount.toLocaleString()}</p>
+                    <p className="text-green-400 text-lg md:text-2xl font-bold">₹{formatNumber(bet.amount)}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Live Activity */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-3xl font-black flex items-center gap-2">
-                  <Activity className="text-green-400" />
+            {/* Live Activity - Responsive */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-8">
+              <div className="flex items-center justify-between mb-4 md:mb-6">
+                <h2 className="text-xl md:text-3xl font-black flex items-center gap-2">
+                  <Activity className="text-green-400" size={20} />
                   Live Activity
                 </h2>
-                <div className="bg-red-500 animate-pulse px-4 py-2 rounded-xl font-black text-sm">LIVE</div>
+                <div className="bg-red-500 animate-pulse px-3 md:px-4 py-1 md:py-2 rounded-xl font-black text-xs md:text-sm">LIVE</div>
               </div>
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {activity.map((item, index) => (
-                  <div key={index} className="bg-black border border-zinc-800 rounded-xl p-3 text-zinc-300">
+                {activity.slice(0, 10).map((item, index) => (
+                  <div key={index} className="bg-black border border-zinc-800 rounded-xl p-3 text-zinc-300 text-sm">
                     {item}
                   </div>
                 ))}
@@ -405,19 +447,19 @@ export default function AdminPage() {
         {/* User Control Section */}
         {section === "users" && (
           <div>
-            <div className="flex items-center justify-between mb-10 flex-wrap gap-4">
-              <h1 className="text-5xl font-black">User Control</h1>
-              <div className="flex gap-3">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 md:mb-10 gap-4">
+              <h1 className="text-3xl md:text-5xl font-black">User Control</h1>
+              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
                 <div className="flex gap-2">
                   <input
                     type="text"
                     placeholder="Search by UID"
                     value={searchUid}
                     onChange={(e) => setSearchUid(e.target.value)}
-                    className="bg-black border border-zinc-700 px-4 py-3 rounded-xl w-48"
+                    className="bg-black border border-zinc-700 px-3 md:px-4 py-2 md:py-3 rounded-xl text-sm w-36 md:w-48"
                   />
-                  <button onClick={searchUser} className="bg-green-500 px-6 rounded-xl font-black">
-                    <Search size={20} />
+                  <button onClick={searchUser} className="bg-green-500 px-4 md:px-6 rounded-xl font-black text-sm">
+                    <Search size={18} />
                   </button>
                 </div>
                 <input
@@ -425,26 +467,27 @@ export default function AdminPage() {
                   placeholder="Search by name"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="bg-black border border-zinc-700 px-4 py-3 rounded-xl w-64"
+                  className="bg-black border border-zinc-700 px-3 md:px-4 py-2 md:py-3 rounded-xl text-sm w-full md:w-64"
                 />
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               {users
                 .filter((u) => u.username?.toLowerCase().includes(search.toLowerCase()) || u.name?.toLowerCase().includes(search.toLowerCase()))
+                .slice(0, 50)
                 .map((user) => (
-                  <div key={user._id} className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div key={user._id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className={`w-3 h-3 rounded-full ${user.banned ? "bg-red-500" : "bg-green-500"} animate-pulse`} />
-                          <h2 className="text-2xl font-black">{user.name || user.username}</h2>
+                        <div className="flex items-center gap-2 md:gap-3 mb-1 md:mb-2">
+                          <div className={`w-2 h-2 rounded-full ${user.banned ? "bg-red-500" : "bg-green-500"} animate-pulse`} />
+                          <h2 className="text-lg md:text-2xl font-black">{user.name || user.username}</h2>
                           <span className="text-xs bg-zinc-800 px-2 py-1 rounded-lg">{user.role || "user"}</span>
                         </div>
-                        <p className="text-zinc-400 text-sm">UID: {user.uid || "N/A"}</p>
-                        <p className="text-zinc-400 text-sm">Email: {user.email}</p>
-                        <p className="text-green-400 text-2xl font-bold mt-2">₹{user.wallet.toLocaleString()}</p>
+                        <p className="text-zinc-400 text-xs md:text-sm">UID: {user.uid || "N/A"}</p>
+                        <p className="text-zinc-400 text-xs md:text-sm mb-1">Email: {user.email}</p>
+                        <p className="text-green-400 text-xl md:text-2xl font-bold">₹{formatNumber(user.wallet)}</p>
                       </div>
                       
                       <div className="flex flex-wrap gap-2">
@@ -454,17 +497,17 @@ export default function AdminPage() {
                             placeholder="Amount"
                             value={walletAmount}
                             onChange={(e) => setWalletAmount(e.target.value)}
-                            className="bg-black border border-zinc-700 px-3 py-2 rounded-xl w-28 text-sm"
+                            className="bg-black border border-zinc-700 px-2 md:px-3 py-2 rounded-xl text-sm w-24"
                           />
                           <button
                             onClick={() => updateUserWallet(user._id, Number(walletAmount), "add")}
-                            className="bg-green-600 px-4 py-2 rounded-xl font-black text-sm hover:bg-green-700"
+                            className="bg-green-600 px-3 md:px-4 py-2 rounded-xl font-black text-sm hover:bg-green-700"
                           >
                             <Plus size={16} />
                           </button>
                           <button
                             onClick={() => updateUserWallet(user._id, Number(walletAmount), "remove")}
-                            className="bg-red-600 px-4 py-2 rounded-xl font-black text-sm hover:bg-red-700"
+                            className="bg-red-600 px-3 md:px-4 py-2 rounded-xl font-black text-sm hover:bg-red-700"
                           >
                             <Minus size={16} />
                           </button>
@@ -472,25 +515,28 @@ export default function AdminPage() {
                         
                         <button
                           onClick={() => toggleBan(user._id)}
-                          className={`px-4 py-2 rounded-xl font-black text-sm ${
+                          className={`px-3 md:px-4 py-2 rounded-xl font-black text-sm ${
                             user.banned ? "bg-yellow-600" : "bg-red-600"
                           }`}
                         >
-                          <Ban size={16} className="inline mr-1" />
+                          <Ban size={14} className="inline mr-1" />
                           {user.banned ? "Unban" : "Ban"}
                         </button>
                         
                         <button
                           onClick={() => deleteUser(user._id)}
-                          className="bg-black border border-red-500 px-4 py-2 rounded-xl font-black text-sm hover:bg-red-500/10"
+                          className="bg-black border border-red-500 px-3 md:px-4 py-2 rounded-xl font-black text-sm hover:bg-red-500/10"
                         >
-                          <Trash2 size={16} className="inline mr-1" />
+                          <Trash2 size={14} className="inline mr-1" />
                           Delete
                         </button>
                       </div>
                     </div>
                   </div>
                 ))}
+              {users.length === 0 && (
+                <div className="text-center py-8 text-zinc-500">No users found</div>
+              )}
             </div>
           </div>
         )}
@@ -498,24 +544,24 @@ export default function AdminPage() {
         {/* Deposit Requests */}
         {section === "deposits" && (
           <div>
-            <h1 className="text-5xl font-black mb-10">Deposit Requests</h1>
-            <div className="space-y-4">
+            <h1 className="text-3xl md:text-5xl font-black mb-6 md:mb-10">Deposit Requests</h1>
+            <div className="space-y-3 md:space-y-4">
               {deposits.length === 0 ? (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-12 text-center">
-                  <p className="text-zinc-500 text-xl">No pending deposit requests</p>
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 md:p-12 text-center">
+                  <p className="text-zinc-500 text-base md:text-xl">No pending deposit requests</p>
                 </div>
               ) : (
                 deposits.map((dep) => (
-                  <div key={dep._id} className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-wrap items-center justify-between gap-4">
+                  <div key={dep._id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-black">{dep.username}</h2>
-                      <p className="text-green-400 text-3xl font-bold mt-1">₹{dep.amount.toLocaleString()}</p>
-                      {dep.upiId && <p className="text-zinc-500 text-sm mt-1">UPI: {dep.upiId}</p>}
+                      <h2 className="text-lg md:text-2xl font-black">{dep.username}</h2>
+                      <p className="text-green-400 text-2xl md:text-3xl font-bold mt-1">₹{formatNumber(dep.amount)}</p>
+                      {dep.upiId && <p className="text-zinc-500 text-xs md:text-sm mt-1">UPI: {dep.upiId}</p>}
                       {dep.createdAt && <p className="text-zinc-500 text-xs">{new Date(dep.createdAt).toLocaleString()}</p>}
                     </div>
                     <button
                       onClick={() => approveDeposit(dep._id)}
-                      className="bg-green-500 hover:bg-green-600 px-8 py-4 rounded-2xl font-black text-lg transition"
+                      className="bg-green-500 hover:bg-green-600 px-6 md:px-8 py-3 md:py-4 rounded-xl font-black text-sm md:text-lg transition"
                     >
                       APPROVE
                     </button>
@@ -529,24 +575,24 @@ export default function AdminPage() {
         {/* Withdraw Requests */}
         {section === "withdraws" && (
           <div>
-            <h1 className="text-5xl font-black mb-10">Withdraw Requests</h1>
-            <div className="space-y-4">
+            <h1 className="text-3xl md:text-5xl font-black mb-6 md:mb-10">Withdraw Requests</h1>
+            <div className="space-y-3 md:space-y-4">
               {withdraws.length === 0 ? (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-12 text-center">
-                  <p className="text-zinc-500 text-xl">No pending withdrawal requests</p>
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 md:p-12 text-center">
+                  <p className="text-zinc-500 text-base md:text-xl">No pending withdrawal requests</p>
                 </div>
               ) : (
                 withdraws.map((wd) => (
-                  <div key={wd._id} className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-wrap items-center justify-between gap-4">
+                  <div key={wd._id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-black">{wd.username}</h2>
-                      <p className="text-blue-400 text-3xl font-bold mt-1">₹{wd.amount.toLocaleString()}</p>
-                      {wd.upiId && <p className="text-zinc-500 text-sm mt-1">UPI: {wd.upiId}</p>}
+                      <h2 className="text-lg md:text-2xl font-black">{wd.username}</h2>
+                      <p className="text-blue-400 text-2xl md:text-3xl font-bold mt-1">₹{formatNumber(wd.amount)}</p>
+                      {wd.upiId && <p className="text-zinc-500 text-xs md:text-sm mt-1">UPI: {wd.upiId}</p>}
                       {wd.createdAt && <p className="text-zinc-500 text-xs">{new Date(wd.createdAt).toLocaleString()}</p>}
                     </div>
                     <button
                       onClick={() => approveWithdraw(wd._id)}
-                      className="bg-blue-500 hover:bg-blue-600 px-8 py-4 rounded-2xl font-black text-lg transition"
+                      className="bg-blue-500 hover:bg-blue-600 px-6 md:px-8 py-3 md:py-4 rounded-xl font-black text-sm md:text-lg transition"
                     >
                       APPROVE
                     </button>
@@ -560,19 +606,18 @@ export default function AdminPage() {
         {/* Game Control Section */}
         {section === "winning" && (
           <div>
-            <h1 className="text-5xl font-black mb-10">Game Control Panel</h1>
+            <h1 className="text-3xl md:text-5xl font-black mb-6 md:mb-10">Game Control Panel</h1>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              {/* Game Status */}
-              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-                <h2 className="text-3xl font-black mb-6 flex items-center gap-2">
-                  <Settings className="text-green-400" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-8">
+                <h2 className="text-xl md:text-3xl font-black mb-4 md:mb-6 flex items-center gap-2">
+                  <Settings className="text-green-400" size={20} />
                   Game Status
                 </h2>
-                <div className="space-y-4">
+                <div className="space-y-3 md:space-y-4">
                   <button
                     onClick={() => saveControl({ gameStatus: "RUNNING" })}
-                    className={`w-full py-4 rounded-2xl text-2xl font-black transition ${
+                    className={`w-full py-3 md:py-4 rounded-xl text-lg md:text-2xl font-black transition ${
                       control.gameStatus === "RUNNING" ? "bg-green-500 text-black" : "bg-green-700 hover:bg-green-600"
                     }`}
                   >
@@ -580,7 +625,7 @@ export default function AdminPage() {
                   </button>
                   <button
                     onClick={() => saveControl({ gameStatus: "PAUSED" })}
-                    className={`w-full py-4 rounded-2xl text-2xl font-black transition ${
+                    className={`w-full py-3 md:py-4 rounded-xl text-lg md:text-2xl font-black transition ${
                       control.gameStatus === "PAUSED" ? "bg-yellow-500 text-black" : "bg-yellow-700 hover:bg-yellow-600"
                     }`}
                   >
@@ -588,7 +633,7 @@ export default function AdminPage() {
                   </button>
                   <button
                     onClick={() => saveControl({ gameStatus: "STOPPED" })}
-                    className={`w-full py-4 rounded-2xl text-2xl font-black transition ${
+                    className={`w-full py-3 md:py-4 rounded-xl text-lg md:text-2xl font-black transition ${
                       control.gameStatus === "STOPPED" ? "bg-red-500" : "bg-red-700 hover:bg-red-600"
                     }`}
                   >
@@ -597,39 +642,37 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* RTP Control */}
-              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-                <h2 className="text-3xl font-black mb-6 flex items-center gap-2">
-                  <BarChart3 className="text-blue-400" />
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-8">
+                <h2 className="text-xl md:text-3xl font-black mb-4 md:mb-6 flex items-center gap-2">
+                  <BarChart3 className="text-blue-400" size={20} />
                   RTP Control
                 </h2>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    <button onClick={() => saveControl({ rtp: 60 })} className="bg-green-700 py-4 rounded-2xl font-black hover:bg-green-600">
+                  <div className="grid grid-cols-3 gap-2 md:gap-3">
+                    <button onClick={() => saveControl({ rtp: 60 })} className="bg-green-700 py-2 md:py-4 rounded-xl font-black text-sm md:text-base hover:bg-green-600">
                       LOW (60%)
                     </button>
-                    <button onClick={() => saveControl({ rtp: 75 })} className="bg-yellow-600 py-4 rounded-2xl font-black hover:bg-yellow-500">
+                    <button onClick={() => saveControl({ rtp: 75 })} className="bg-yellow-600 py-2 md:py-4 rounded-xl font-black text-sm md:text-base hover:bg-yellow-500">
                       MEDIUM (75%)
                     </button>
-                    <button onClick={() => saveControl({ rtp: 90 })} className="bg-red-600 py-4 rounded-2xl font-black hover:bg-red-500">
+                    <button onClick={() => saveControl({ rtp: 90 })} className="bg-red-600 py-2 md:py-4 rounded-xl font-black text-sm md:text-base hover:bg-red-500">
                       HIGH (90%)
                     </button>
                   </div>
-                  <div className="text-center p-4 bg-black rounded-2xl">
-                    <p className="text-zinc-500">Current RTP</p>
-                    <p className="text-5xl font-bold text-green-400">{control.rtp}%</p>
+                  <div className="text-center p-3 md:p-4 bg-black rounded-xl">
+                    <p className="text-zinc-500 text-sm">Current RTP</p>
+                    <p className="text-3xl md:text-5xl font-bold text-green-400">{control.rtp}%</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* NumCards Control */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 mb-8">
-              <h2 className="text-3xl font-black mb-6 flex items-center gap-2">
-                <Gamepad2 className="text-purple-400" />
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-8 mb-6 md:mb-8">
+              <h2 className="text-xl md:text-3xl font-black mb-4 md:mb-6 flex items-center gap-2">
+                <Gamepad2 className="text-purple-400" size={20} />
                 NumCards Control
               </h2>
-              <div className="grid grid-cols-5 gap-3">
+              <div className="grid grid-cols-5 gap-2 md:gap-3">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                   <button
                     key={num}
@@ -637,7 +680,7 @@ export default function AdminPage() {
                       saveControl({ numcards: String(num) });
                       forceGameResult("numcards", num);
                     }}
-                    className={`h-16 rounded-2xl text-2xl font-black transition ${
+                    className={`h-12 md:h-16 rounded-xl text-base md:text-2xl font-black transition ${
                       control.numcards === String(num) ? "bg-green-500 text-black" : "bg-black border border-zinc-700 hover:bg-zinc-800"
                     }`}
                   >
@@ -647,13 +690,12 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Sky Control */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-              <h2 className="text-3xl font-black mb-6 flex items-center gap-2">
-                <Award className="text-cyan-400" />
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-8">
+              <h2 className="text-xl md:text-3xl font-black mb-4 md:mb-6 flex items-center gap-2">
+                <Award className="text-cyan-400" size={20} />
                 Sky / Aviator Control
               </h2>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-4 gap-2 md:gap-3">
                 {["1.5x", "2x", "5x", "10x", "25x", "50x", "100x", "random"].map((item) => (
                   <button
                     key={item}
@@ -661,7 +703,7 @@ export default function AdminPage() {
                       saveControl({ sky: item });
                       forceGameResult("sky", item);
                     }}
-                    className={`h-16 rounded-2xl text-lg font-black transition ${
+                    className={`h-12 md:h-16 rounded-xl text-sm md:text-lg font-black transition ${
                       control.sky === item ? "bg-green-500 text-black" : "bg-black border border-zinc-700 hover:bg-zinc-800"
                     }`}
                   >
@@ -669,9 +711,9 @@ export default function AdminPage() {
                   </button>
                 ))}
               </div>
-              <div className="mt-6 p-4 bg-black rounded-2xl text-center">
-                <p className="text-zinc-500">Current Sky Result</p>
-                <p className="text-4xl font-bold text-cyan-400">{control.sky}</p>
+              <div className="mt-4 md:mt-6 p-3 md:p-4 bg-black rounded-xl text-center">
+                <p className="text-zinc-500 text-sm">Current Sky Result</p>
+                <p className="text-2xl md:text-4xl font-bold text-cyan-400">{control.sky}</p>
               </div>
             </div>
           </div>
@@ -680,44 +722,44 @@ export default function AdminPage() {
         {/* Analytics Section */}
         {section === "analytics" && (
           <div>
-            <h1 className="text-5xl font-black mb-10">Analytics</h1>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-                <h2 className="text-2xl font-black mb-4">User Statistics</h2>
-                <div className="space-y-3">
+            <h1 className="text-3xl md:text-5xl font-black mb-6 md:mb-10">Analytics</h1>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-8">
+                <h2 className="text-xl md:text-2xl font-black mb-4">User Statistics</h2>
+                <div className="space-y-2 md:space-y-3">
                   <div className="flex justify-between">
-                    <span>Total Users:</span>
-                    <span className="font-bold text-green-400">{stats.totalUsers}</span>
+                    <span className="text-sm md:text-base">Total Users:</span>
+                    <span className="font-bold text-green-400 text-sm md:text-base">{formatNumber(stats.totalUsers)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Active Users:</span>
-                    <span className="font-bold text-green-400">{stats.activeUsers}</span>
+                    <span className="text-sm md:text-base">Active Users:</span>
+                    <span className="font-bold text-green-400 text-sm md:text-base">{formatNumber(stats.activeUsers)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Banned Users:</span>
-                    <span className="font-bold text-red-400">{stats.bannedUsers}</span>
+                    <span className="text-sm md:text-base">Banned Users:</span>
+                    <span className="font-bold text-red-400 text-sm md:text-base">{formatNumber(stats.bannedUsers)}</span>
                   </div>
                 </div>
               </div>
               
-              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-                <h2 className="text-2xl font-black mb-4">Financial Statistics</h2>
-                <div className="space-y-3">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 md:p-8">
+                <h2 className="text-xl md:text-2xl font-black mb-4">Financial Statistics</h2>
+                <div className="space-y-2 md:space-y-3">
                   <div className="flex justify-between">
-                    <span>Total Deposits:</span>
-                    <span className="font-bold text-green-400">₹{stats.totalDeposits.toLocaleString()}</span>
+                    <span className="text-sm md:text-base">Total Deposits:</span>
+                    <span className="font-bold text-green-400 text-sm md:text-base">₹{formatNumber(stats.totalDeposits)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Total Withdraws:</span>
-                    <span className="font-bold text-red-400">₹{stats.totalWithdraws.toLocaleString()}</span>
+                    <span className="text-sm md:text-base">Total Withdraws:</span>
+                    <span className="font-bold text-red-400 text-sm md:text-base">₹{formatNumber(stats.totalWithdraws)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Total Bets:</span>
-                    <span className="font-bold text-blue-400">{stats.totalBets.toLocaleString()}</span>
+                    <span className="text-sm md:text-base">Total Bets:</span>
+                    <span className="font-bold text-blue-400 text-sm md:text-base">{formatNumber(stats.totalBets)}</span>
                   </div>
-                  <div className="flex justify-between pt-3 border-t border-zinc-800">
-                    <span>Net Profit:</span>
-                    <span className="font-bold text-yellow-400">₹{(stats.totalDeposits - stats.totalWithdraws).toLocaleString()}</span>
+                  <div className="flex justify-between pt-2 md:pt-3 border-t border-zinc-800">
+                    <span className="text-sm md:text-base">Net Profit:</span>
+                    <span className="font-bold text-yellow-400 text-sm md:text-base">₹{formatNumber(stats.totalDeposits - stats.totalWithdraws)}</span>
                   </div>
                 </div>
               </div>
@@ -729,12 +771,12 @@ export default function AdminPage() {
       {/* User Modal */}
       {showUserModal && selectedUser && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowUserModal(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-3xl font-black mb-4">{selectedUser.name || selectedUser.username}</h2>
-            <div className="space-y-3">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-2xl font-black mb-4">{selectedUser.name || selectedUser.username}</h2>
+            <div className="space-y-2 text-sm">
               <p><span className="text-zinc-500">UID:</span> {selectedUser.uid}</p>
               <p><span className="text-zinc-500">Email:</span> {selectedUser.email}</p>
-              <p><span className="text-zinc-500">Wallet:</span> <span className="text-green-400 font-bold">₹{selectedUser.wallet.toLocaleString()}</span></p>
+              <p><span className="text-zinc-500">Wallet:</span> <span className="text-green-400 font-bold">₹{formatNumber(selectedUser.wallet)}</span></p>
               <p><span className="text-zinc-500">Status:</span> {selectedUser.banned ? <span className="text-red-400">Banned</span> : <span className="text-green-400">Active</span>}</p>
             </div>
             <button onClick={() => setShowUserModal(false)} className="w-full mt-6 bg-green-500 py-3 rounded-xl font-black">

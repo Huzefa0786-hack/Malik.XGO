@@ -22,7 +22,8 @@ import {
   Key,
   RefreshCw,
   Trophy,
-  TrendingUp
+  TrendingUp,
+  AlertCircle
 } from "lucide-react";
 
 export default function ProfilePage() {
@@ -40,12 +41,18 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [updateLoading, setUpdateLoading] = useState(false);
   const [stats, setStats] = useState({ totalWins: 0, totalLosses: 0, totalProfit: 0 });
+  const [updateError, setUpdateError] = useState("");
+  const [updateSuccess, setUpdateSuccess] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
     const userData = localStorage.getItem("user");
+
+    console.log("Token exists:", !!token);
+    console.log("User data from localStorage:", userData);
 
     if (!token || !userData) {
       router.push("/login?redirect=/profile");
@@ -54,18 +61,18 @@ export default function ProfilePage() {
 
     try {
       const parsedUser = JSON.parse(userData);
-      console.log("User data:", parsedUser); // Debug log
+      console.log("Parsed user data:", parsedUser);
       setUser(parsedUser);
       setEditName(parsedUser.name || parsedUser.username || "");
       setEditEmail(parsedUser.email || "");
       
-      // Load profile image from localStorage
       const savedImage = localStorage.getItem("profileImage");
       if (savedImage) {
         setProfileImage(savedImage);
       }
       
       fetchStats(token);
+      fetchLatestUserData(token);
     } catch (error) {
       console.error("Failed to parse user:", error);
       router.push("/login");
@@ -73,6 +80,22 @@ export default function ProfilePage() {
       setLoading(false);
     }
   }, [router]);
+
+  const fetchLatestUserData = async (token: string) => {
+    try {
+      const response = await axios.get("http://localhost:5001/api/auth/profile", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      console.log("Latest user data from API:", response.data);
+      if (response.data.success) {
+        setUser(response.data.user);
+        localStorage.setItem("user", JSON.stringify(response.data.user));
+        console.log("Updated localStorage with:", response.data.user);
+      }
+    } catch (error) {
+      console.error("Failed to fetch latest user data:", error);
+    }
+  };
 
   const fetchStats = async (token: string) => {
     try {
@@ -93,10 +116,13 @@ export default function ProfilePage() {
   };
 
   const handleCopyUid = () => {
-    const uid = user?.uid || user?.userId || user?._id || "N/A";
-    navigator.clipboard.writeText(uid);
-    setCopiedUid(true);
-    setTimeout(() => setCopiedUid(false), 2000);
+    const uid = user?.uid;
+    console.log("Copying UID:", uid);
+    if (uid) {
+      navigator.clipboard.writeText(uid);
+      setCopiedUid(true);
+      setTimeout(() => setCopiedUid(false), 2000);
+    }
   };
 
   const handleCopyEmail = () => {
@@ -109,6 +135,10 @@ export default function ProfilePage() {
     const token = localStorage.getItem("token");
     if (!token) return;
 
+    setUpdateLoading(true);
+    setUpdateError("");
+    setUpdateSuccess("");
+
     try {
       const response = await axios.put(
         "http://localhost:5001/api/auth/profile",
@@ -117,30 +147,37 @@ export default function ProfilePage() {
       );
 
       if (response.data.success) {
-        const updatedUser = { ...user, name: editName, email: editEmail };
+        const updatedUser = { ...user, ...response.data.user };
         setUser(updatedUser);
         localStorage.setItem("user", JSON.stringify(updatedUser));
         setIsEditing(false);
-        alert("Profile updated successfully!");
+        setUpdateSuccess("Profile updated successfully!");
+        setTimeout(() => setUpdateSuccess(""), 3000);
+        
+        fetchLatestUserData(token);
       }
     } catch (error: any) {
-      alert(error.response?.data?.error || "Failed to update profile");
+      console.error("Update error:", error);
+      setUpdateError(error.response?.data?.error || "Failed to update profile");
+      setTimeout(() => setUpdateError(""), 3000);
+    } finally {
+      setUpdateLoading(false);
     }
   };
 
   const handleChangePassword = async () => {
     if (!newPassword || !oldPassword) {
-      alert("Please fill all fields");
+      setUpdateError("Please fill all fields");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      alert("New passwords do not match");
+      setUpdateError("New passwords do not match");
       return;
     }
 
     if (newPassword.length < 6) {
-      alert("Password must be at least 6 characters");
+      setUpdateError("Password must be at least 6 characters");
       return;
     }
 
@@ -148,6 +185,8 @@ export default function ProfilePage() {
     if (!token) return;
 
     setPasswordLoading(true);
+    setUpdateError("");
+    
     try {
       const response = await axios.put(
         "http://localhost:5001/api/auth/change-password",
@@ -156,14 +195,16 @@ export default function ProfilePage() {
       );
 
       if (response.data.success) {
-        alert("Password changed successfully!");
+        setUpdateSuccess("Password changed successfully!");
         setShowPasswordModal(false);
         setOldPassword("");
         setNewPassword("");
         setConfirmPassword("");
+        setTimeout(() => setUpdateSuccess(""), 3000);
       }
     } catch (error: any) {
-      alert(error.response?.data?.error || "Failed to change password");
+      setUpdateError(error.response?.data?.error || "Failed to change password");
+      setTimeout(() => setUpdateError(""), 3000);
     } finally {
       setPasswordLoading(false);
     }
@@ -196,11 +237,6 @@ export default function ProfilePage() {
     });
   };
 
-  // Get the user ID from various possible fields
-  const getUserId = () => {
-    return user?.uid || user?.userId || user?._id || "Not Available";
-  };
-
   if (loading) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -212,7 +248,11 @@ export default function ProfilePage() {
     );
   }
 
-  const userId = getUserId();
+  // Debug log to see what user data is available
+  console.log("User object in render:", user);
+  console.log("User UID:", user?.uid);
+  console.log("User ID:", user?.id);
+  console.log("User _id:", user?._id);
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -230,11 +270,22 @@ export default function ProfilePage() {
           </button>
         </div>
 
+        {/* Success/Error Messages */}
+        {updateSuccess && (
+          <div className="mb-4 p-3 bg-green-500/20 border border-green-500 rounded-xl text-green-400 text-center">
+            {updateSuccess}
+          </div>
+        )}
+        {updateError && (
+          <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-xl text-red-400 text-center flex items-center justify-center gap-2">
+            <AlertCircle size={16} /> {updateError}
+          </div>
+        )}
+
         <div className="bg-linear-to-br from-zinc-950 to-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
           {/* Cover Image */}
           <div className="h-32 bg-linear-to-r from-green-600 to-green-800 relative">
             <div className="absolute -bottom-16 left-8">
-              {/* Profile Image */}
               <div className="relative group">
                 <div className="w-32 h-32 rounded-2xl bg-zinc-800 border-4 border-zinc-900 overflow-hidden flex items-center justify-center">
                   {profileImage ? (
@@ -269,16 +320,22 @@ export default function ProfilePage() {
               {isEditing ? (
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setIsEditing(false)}
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditName(user?.name || "");
+                      setEditEmail(user?.email || "");
+                    }}
                     className="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl flex items-center gap-2 transition"
                   >
                     <X size={18} /> Cancel
                   </button>
                   <button
                     onClick={handleSaveProfile}
-                    className="bg-green-500 hover:bg-green-600 text-black px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition"
+                    disabled={updateLoading}
+                    className="bg-green-500 hover:bg-green-600 text-black px-4 py-2 rounded-xl flex items-center gap-2 font-bold transition disabled:opacity-50"
                   >
-                    <Save size={18} /> Save Changes
+                    {updateLoading ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+                    {updateLoading ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               ) : (
@@ -298,7 +355,8 @@ export default function ProfilePage() {
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="text-3xl md:text-4xl font-black bg-black border border-zinc-700 rounded-xl px-4 py-2 w-full md:w-auto"
+                  className="text-3xl md:text-4xl font-black bg-black border border-zinc-700 rounded-xl px-4 py-2 w-full md:w-auto focus:border-green-500 outline-none"
+                  placeholder="Your Name"
                 />
               ) : (
                 <h1 className="text-3xl md:text-4xl font-black text-green-400">
@@ -340,8 +398,8 @@ export default function ProfilePage() {
 
             {/* User Details */}
             <div className="space-y-4">
-              {/* UID Card - MOST IMPORTANT */}
-              <div className="bg-black rounded-2xl p-5 border border-green-500/30">
+              {/* UID Card - THIS IS THE IMPORTANT PART */}
+              <div className="bg-linear-to-r from-green-900/20 to-black rounded-2xl p-5 border border-green-500/30">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
@@ -350,8 +408,10 @@ export default function ProfilePage() {
                     <div>
                       <p className="text-zinc-500 text-sm">User ID / UID</p>
                       <div className="flex items-center gap-2">
-                        <p className="text-2xl font-mono font-bold text-green-400">{userId}</p>
-                        {userId !== "Not Available" && (
+                        <p className="text-2xl font-mono font-bold text-green-400">
+                          {user?.uid || "Not Available"}
+                        </p>
+                        {user?.uid && (
                           <button
                             onClick={handleCopyUid}
                             className="bg-zinc-800 hover:bg-zinc-700 p-1.5 rounded-lg transition"
@@ -361,51 +421,52 @@ export default function ProfilePage() {
                           </button>
                         )}
                       </div>
+                      <p className="text-xs text-zinc-500 mt-1">This is your unique identifier</p>
                     </div>
                   </div>
                   <div className="bg-green-500/10 px-3 py-1 rounded-lg">
-                    <p className="text-xs text-green-400">Your unique identifier</p>
+                    <p className="text-xs text-green-400">Cannot be changed</p>
                   </div>
                 </div>
               </div>
 
               {/* Email Card */}
               <div className="bg-black rounded-2xl p-5 border border-zinc-800">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                      <Mail className="text-blue-400" size={20} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-zinc-500 text-sm">Email Address</p>
-                      {isEditing ? (
-                        <input
-                          type="email"
-                          value={editEmail}
-                          onChange={(e) => setEditEmail(e.target.value)}
-                          className="text-lg bg-black border border-zinc-700 rounded-xl px-3 py-2 w-full mt-1"
-                        />
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <p className="text-xl font-bold">{user?.email || "Not set"}</p>
-                          {user?.email && (
-                            <button
-                              onClick={handleCopyEmail}
-                              className="bg-zinc-800 hover:bg-zinc-700 p-1.5 rounded-lg transition"
-                            >
-                              {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                    <Mail className="text-blue-400" size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-zinc-500 text-sm">Email Address</p>
+                    {isEditing ? (
+                      <input
+                        type="email"
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        className="text-lg bg-black border border-zinc-700 rounded-xl px-3 py-2 w-full mt-1 focus:border-green-500 outline-none"
+                        placeholder="your@email.com"
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <p className="text-xl font-bold">{user?.email || "Not set"}</p>
+                        {user?.email && (
+                          <button
+                            onClick={handleCopyEmail}
+                            className="bg-zinc-800 hover:bg-zinc-700 p-1.5 rounded-lg transition"
+                            title="Copy Email"
+                          >
+                            {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Wallet Balance Card */}
               <div className="bg-linear-to-r from-green-900/20 to-black rounded-2xl p-5 border border-green-500/30">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
                       <Wallet className="text-green-400" size={20} />

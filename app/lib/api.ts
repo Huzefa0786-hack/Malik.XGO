@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_URL = 'http://localhost:5001/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -10,27 +10,25 @@ const api = axios.create({
   },
 });
 
-// Request interceptor - adds token to EVERY request automatically
+// Add token to requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
-      if (!config.headers) config.headers = {} as any;
-      (config.headers as any).Authorization = `Bearer ${token}`;
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - handles 401 errors globally
+// Handle responses
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      localStorage.removeItem('loggedIn');
       window.location.href = '/login';
     }
     return Promise.reject(error);
