@@ -122,20 +122,19 @@ router.post("/login", async (req, res) => {
 
     // Return success response
     res.json({
-      success: true,
-      message: "Login successful",
-      token,
-      user: {
-        id: user._id,
-        uid: user.uid,
-        name: user.name,
-        email: user.email,
-        wallet: user.wallet,
-        role: user.role,
-        isBanned: user.isBanned,
-        createdAt: user.createdAt
-      }
-    });
+  success: true,
+  token,
+  user: {
+    id: user._id,
+    uid: user.uid,
+    name: user.name,
+    email: user.email,
+    wallet: user.wallet,
+    role: user.role,  
+    isBanned: user.isBanned,
+    createdAt: user.createdAt
+  }
+});
 
   } catch (err) {
     console.error("LOGIN ERROR:", err);

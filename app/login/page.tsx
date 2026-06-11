@@ -1,14 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import api from "../lib/api";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirect') || '/';
-  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,22 +22,38 @@ export default function LoginPage() {
     try {
       setLoading(true);
       
-      const res = await api.post("/auth/login", { email, password });
+      const res = await fetch("http://localhost:5002/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
       
-      if (res.data.token) {
-        localStorage.setItem("token", res.data.token);
-        localStorage.setItem("user", JSON.stringify(res.data.user));
+      const data = await res.json();
+      
+      console.log("Login response:", data);
+      
+      if (data.success && data.token) {
+        // Save to localStorage
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
         localStorage.setItem("loggedIn", "true");
         
-        alert("Login Successful!");
-        router.push(redirectTo);
+        console.log("User role:", data.user.role);
+        
+        // Redirect based on role
+        if (data.user.role === "admin") {
+          console.log("Redirecting to admin panel...");
+          window.location.href = "/admin";
+        } else {
+          window.location.href = "/";
+        }
       } else {
-        setError("No token received");
+        setError(data.error || "Login failed");
       }
       
     } catch (err: any) {
       console.error("Login error:", err);
-      setError(err.response?.data?.error || "Login Failed");
+      setError("Network error. Make sure backend is running on port 5002");
     } finally {
       setLoading(false);
     }
@@ -85,17 +97,10 @@ export default function LoginPage() {
             {loading ? "LOGGING IN..." : "LOGIN"}
           </button>
 
-          <p className="text-center text-gray-400 mt-4">
-            Don't have an account?
-          </p>
-
-          <button
-            type="button"
-            onClick={() => router.push("/register")}
-            className="w-full mt-2 bg-zinc-800 hover:bg-zinc-700 rounded-2xl py-4 font-bold text-white transition-colors"
-          >
-            REGISTER
-          </button>
+          <div className="mt-4 text-center text-sm">
+            <p className="text-zinc-500">Admin Demo:</p>
+            <p className="text-green-400">WELLCOME / MALIK.XGO</p>
+          </div>
         </form>
       </div>
     </main>
