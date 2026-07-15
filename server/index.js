@@ -7,20 +7,33 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import transactionRoutes from "./routes/transaction.js";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+// ============ SINGLE DECLARATION (REMOVED DUPLICATES) ============
 const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 5002;
 
-// Middleware
+// ============ MIDDLEWARE ============
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001'],
+  origin: [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:3001',
+    process.env.FRONTEND_URL,
+    'https://your-frontend.vercel.app'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -34,13 +47,12 @@ const io = new Server(server, {
 
 app.set('io', io);
 
-// ============ IN-MEMORY STORAGE (for when MongoDB is not available) ============
+// ============ IN-MEMORY STORAGE ============
 let inMemoryUsers = [];
 let inMemoryBets = [];
 let nextUserId = 1;
 let nextBetId = 1;
 
-// Helper functions
 const generateUID = () => {
   return "MX" + Math.floor(100000 + Math.random() * 900000);
 };
@@ -55,14 +67,11 @@ const saveUserToMemory = (user) => {
   return user;
 };
 
-// ============ USER MODEL (works with both MongoDB and in-memory) ============
+// ============ USER MODEL ============
 let User;
-
-// Try to connect to MongoDB, fallback to in-memory
 const MONGODB_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/matkaking';
 let useMongoDB = false;
 
-// Define User Schema for MongoDB
 const UserSchema = new mongoose.Schema({
   uid: { type: String, unique: true },
   name: { type: String, required: true },
@@ -74,7 +83,6 @@ const UserSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-// Create in-memory User model
 const createInMemoryUserModel = () => {
   class InMemoryUser {
     constructor(data) {
@@ -95,12 +103,8 @@ const createInMemoryUserModel = () => {
     }
     
     static async findOne(query) {
-      if (query.email) {
-        return inMemoryUsers.find(u => u.email === query.email);
-      }
-      if (query.uid) {
-        return inMemoryUsers.find(u => u.uid === query.uid);
-      }
+      if (query.email) return inMemoryUsers.find(u => u.email === query.email);
+      if (query.uid) return inMemoryUsers.find(u => u.uid === query.uid);
       return null;
     }
     
@@ -112,7 +116,7 @@ const createInMemoryUserModel = () => {
       return [...inMemoryUsers];
     }
     
-    static async findByIdAndUpdate(id, update, options) {
+    static async findByIdAndUpdate(id, update) {
       const index = inMemoryUsers.findIndex(u => u._id === id);
       if (index !== -1) {
         inMemoryUsers[index] = { ...inMemoryUsers[index], ...update };
@@ -131,7 +135,6 @@ const createInMemoryUserModel = () => {
       return null;
     }
   }
-  
   return InMemoryUser;
 };
 
@@ -182,12 +185,8 @@ const createInMemoryBetModel = () => {
     
     static async find(query) {
       let bets = [...inMemoryBets];
-      if (query.userId) {
-        bets = bets.filter(b => b.userId === query.userId);
-      }
-      if (query.game) {
-        bets = bets.filter(b => b.game === query.game);
-      }
+      if (query.userId) bets = bets.filter(b => b.userId === query.userId);
+      if (query.game) bets = bets.filter(b => b.game === query.game);
       return bets.sort((a, b) => b.createdAt - a.createdAt);
     }
     
@@ -204,33 +203,22 @@ const createInMemoryBetModel = () => {
       return null;
     }
     
-    static async aggregate(pipeline) {
-      // Simple aggregation for stats
-      const match = pipeline.find(p => p.$match);
-      let bets = [...inMemoryBets];
-      if (match && match.$match.userId) {
-        bets = bets.filter(b => b.userId === match.$match.userId);
-      }
-      if (match && match.$match.status) {
-        bets = bets.filter(b => b.status === match.$match.status);
-      }
-      
+    static async aggregate() {
+      const bets = inMemoryBets.filter(b => b.status === "completed");
       const stats = {
         totalBets: bets.length,
         totalWins: bets.filter(b => b.isWin).length,
-        totalLosses: bets.filter(b => !b.isWin && b.status === "completed").length,
+        totalLosses: bets.filter(b => !b.isWin).length,
         totalWonAmount: bets.reduce((sum, b) => sum + (b.winAmount || 0), 0),
         totalBetAmount: bets.reduce((sum, b) => sum + b.amount, 0)
       };
-      
       return [stats];
     }
   }
-  
   return InMemoryBet;
 };
 
-// ============ CONNECT TO MONGODB OR USE IN-MEMORY ============
+// ============ CONNECT TO MONGODB ============
 console.log('📡 Attempting to connect to MongoDB...');
 
 mongoose.connect(MONGODB_URI)
@@ -248,7 +236,6 @@ mongoose.connect(MONGODB_URI)
     User = createInMemoryUserModel();
     Bet = createInMemoryBetModel();
     
-    // Create a default admin user for in-memory storage
     const createDefaultAdmin = async () => {
       const existingAdmin = await User.findOne({ email: "admin@malikxgo.com" });
       if (!existingAdmin) {
@@ -272,36 +259,24 @@ mongoose.connect(MONGODB_URI)
 app.post("/api/auth/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
-
     if (!name || !email || !password) {
       return res.status(400).json({ error: "All fields are required" });
     }
-
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ error: "Email already exists" });
     }
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const uid = generateUID();
-
     const user = new User({
-      uid,
-      name,
-      email,
-      password: hashedPassword,
-      wallet: 700,
-      role: "user"
+      uid, name, email, password: hashedPassword, wallet: 700, role: "user"
     });
-
     await user.save();
-
     const token = jwt.sign(
       { id: user._id, uid: user.uid },
       process.env.JWT_SECRET || "secret123",
       { expiresIn: "30d" }
     );
-
     res.status(201).json({
       success: true,
       token,
@@ -316,7 +291,6 @@ app.post("/api/auth/register", async (req, res) => {
         createdAt: user.createdAt
       }
     });
-
   } catch (err) {
     console.error("REGISTER ERROR:", err);
     res.status(500).json({ error: err.message });
@@ -326,31 +300,25 @@ app.post("/api/auth/register", async (req, res) => {
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password required" });
     }
-
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-
     if (user.isBanned) {
       return res.status(403).json({ error: "Account banned. Contact support." });
     }
-
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-
     const token = jwt.sign(
       { id: user._id, uid: user.uid },
       process.env.JWT_SECRET || "secret123",
       { expiresIn: "30d" }
     );
-
     res.json({
       success: true,
       token,
@@ -365,7 +333,6 @@ app.post("/api/auth/login", async (req, res) => {
         createdAt: user.createdAt
       }
     });
-
   } catch (err) {
     console.error("LOGIN ERROR:", err);
     res.status(500).json({ error: err.message });
@@ -375,17 +342,10 @@ app.post("/api/auth/login", async (req, res) => {
 app.get("/api/auth/profile", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({ error: "No token" });
-    }
-
+    if (!token) return res.status(401).json({ error: "No token" });
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret123");
     const user = await User.findById(decoded.id);
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
+    if (!user) return res.status(404).json({ error: "User not found" });
     res.json({
       success: true,
       user: {
@@ -399,7 +359,6 @@ app.get("/api/auth/profile", async (req, res) => {
         createdAt: user.createdAt
       }
     });
-
   } catch (err) {
     res.status(401).json({ error: "Invalid token" });
   }
@@ -409,23 +368,16 @@ app.put("/api/auth/profile", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "No token" });
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret123");
     const { name, email } = req.body;
-
     if (email) {
       const existingUser = await User.findOne({ email, _id: { $ne: decoded.id } });
-      if (existingUser) {
-        return res.status(400).json({ error: "Email already in use" });
-      }
+      if (existingUser) return res.status(400).json({ error: "Email already in use" });
     }
-
     const updateData = {};
     if (name) updateData.name = name;
     if (email) updateData.email = email;
-
     const user = await User.findByIdAndUpdate(decoded.id, updateData, { new: true });
-
     res.json({
       success: true,
       user: {
@@ -438,7 +390,6 @@ app.put("/api/auth/profile", async (req, res) => {
         isBanned: user.isBanned
       }
     });
-
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -448,31 +399,23 @@ app.put("/api/auth/change-password", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "No token" });
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret123");
     const { oldPassword, newPassword } = req.body;
-
     if (!oldPassword || !newPassword) {
       return res.status(400).json({ error: "All fields required" });
     }
-
     if (newPassword.length < 6) {
       return res.status(400).json({ error: "Password must be at least 6 characters" });
     }
-
     const user = await User.findById(decoded.id);
     if (!user) return res.status(404).json({ error: "User not found" });
-
     const isValid = await bcrypt.compare(oldPassword, user.password);
     if (!isValid) {
       return res.status(401).json({ error: "Current password incorrect" });
     }
-
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
-
     res.json({ success: true, message: "Password changed successfully" });
-
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -501,10 +444,8 @@ app.put("/api/auth/ban/:id", async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: "User not found" });
-
     user.isBanned = !user.isBanned;
     await user.save();
-
     res.json({ success: true, message: `User ${user.isBanned ? 'banned' : 'unbanned'}` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -534,30 +475,15 @@ app.put("/api/auth/wallet/:id", async (req, res) => {
 app.post("/api/bet/place", async (req, res) => {
   try {
     const { game, amount, selection, betType, multiplier, roundId } = req.body;
-    
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({ error: "No token provided" });
-    }
-    
+    if (!token) return res.status(401).json({ error: "No token provided" });
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret123");
     const user = await User.findById(decoded.id);
-    
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    
-    if (amount < 10) {
-      return res.status(400).json({ error: "Minimum bet is ₹10" });
-    }
-    
-    if (amount > user.wallet) {
-      return res.status(400).json({ error: "Insufficient balance" });
-    }
-    
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (amount < 10) return res.status(400).json({ error: "Minimum bet is ₹10" });
+    if (amount > user.wallet) return res.status(400).json({ error: "Insufficient balance" });
     user.wallet -= amount;
     await user.save();
-    
     const bet = new Bet({
       userId: user._id,
       userName: user.name,
@@ -571,7 +497,6 @@ app.post("/api/bet/place", async (req, res) => {
       status: "pending"
     });
     await bet.save();
-    
     res.json({
       success: true,
       wallet: user.wallet,
@@ -587,19 +512,11 @@ app.post("/api/bet/place", async (req, res) => {
 app.post("/api/bet/cashout", async (req, res) => {
   try {
     const { betId, winAmount, result, multiplier } = req.body;
-    
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({ error: "No token provided" });
-    }
-    
+    if (!token) return res.status(401).json({ error: "No token provided" });
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret123");
     const user = await User.findById(decoded.id);
-    
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    
+    if (!user) return res.status(404).json({ error: "User not found" });
     if (betId) {
       await Bet.findByIdAndUpdate(betId, {
         isWin: winAmount > 0,
@@ -609,12 +526,10 @@ app.post("/api/bet/cashout", async (req, res) => {
         status: "completed"
       });
     }
-    
     if (winAmount > 0) {
       user.wallet += winAmount;
       await user.save();
     }
-    
     res.json({
       success: true,
       wallet: user.wallet,
@@ -625,35 +540,24 @@ app.post("/api/bet/cashout", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ============ TRANSACTION ROUTES ============
 app.use("/api/transaction", transactionRoutes);
+
 app.get("/api/bet/history", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({ error: "No token" });
-    }
-    
+    if (!token) return res.status(401).json({ error: "No token" });
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret123");
     const { game, limit = 100 } = req.query;
-    
     let query = { userId: decoded.id };
     if (game && game !== "all") query.game = game;
-    
     const bets = await Bet.find(query);
-    const stats = await Bet.aggregate([
-      { $match: { userId: decoded.id, status: "completed" } }
-    ]);
-    
+    const stats = await Bet.aggregate();
     res.json({
       success: true,
       bets: bets.slice(0, parseInt(limit)),
-      stats: stats[0] || {
-        totalBets: 0,
-        totalWins: 0,
-        totalLosses: 0,
-        totalWonAmount: 0,
-        totalBetAmount: 0
-      }
+      stats: stats[0] || { totalBets: 0, totalWins: 0, totalLosses: 0, totalWonAmount: 0, totalBetAmount: 0 }
     });
   } catch (err) {
     console.error("History error:", err);
@@ -664,13 +568,9 @@ app.get("/api/bet/history", async (req, res) => {
 app.get("/api/wallet/balance", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({ error: "No token" });
-    }
-    
+    if (!token) return res.status(401).json({ error: "No token" });
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret123");
     const user = await User.findById(decoded.id);
-    
     res.json({ success: true, balance: user?.wallet || 0 });
   } catch (err) {
     res.status(401).json({ error: "Invalid token" });
@@ -718,13 +618,7 @@ const startGameLoop = () => {
         const colors = ["GREEN", "VIOLET", "RED"];
         const colorResult = colors[Math.floor(Math.random() * colors.length)];
         const numberResult = Math.floor(Math.random() * 10);
-        
-        lastResults = {
-          numcards: numcardsResult,
-          color: colorResult,
-          number: numberResult
-        };
-        
+        lastResults = { numcards: numcardsResult, color: colorResult, number: numberResult };
         io.emit('result_update', lastResults);
         currentRoundId = `round-${Date.now()}`;
         io.emit('round_start', currentRoundId);
@@ -737,24 +631,13 @@ const startGameLoop = () => {
 
 io.on('connection', (socket) => {
   console.log('🟢 Client connected:', socket.id);
-  
   socket.emit('timer_update', globalTimer);
   socket.emit('result_update', lastResults);
   socket.emit('round_start', currentRoundId);
   socket.emit('game_status', gameStatus);
-  
-  socket.on('join_game', (game) => {
-    socket.join(game);
-    console.log(`📱 User joined ${game}`);
-  });
-  
-  socket.on('place_bet', (betData) => {
-    io.to('numcards').emit('live_bet', betData);
-  });
-  
-  socket.on('disconnect', () => {
-    console.log('🔴 Client disconnected:', socket.id);
-  });
+  socket.on('join_game', (game) => { socket.join(game); console.log(`📱 User joined ${game}`); });
+  socket.on('place_bet', (betData) => { io.to('numcards').emit('live_bet', betData); });
+  socket.on('disconnect', () => { console.log('🔴 Client disconnected:', socket.id); });
 });
 
 // ============ START SERVER ============
@@ -779,7 +662,7 @@ function startServer() {
     console.log(`   - Health: http://localhost:${PORT}/api/health`);
     console.log(`   - Auth: http://localhost:${PORT}/api/auth`);
     console.log(`   - Bet: http://localhost:${PORT}/api/bet`);
-    console.log(`\n🔑 Default admin credentials (in-memory mode):`);
+    console.log(`\n🔑 Default admin credentials:`);
     console.log(`   Email: admin@malikxgo.com`);
     console.log(`   Password: admin123\n`);
   });

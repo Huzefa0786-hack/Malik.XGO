@@ -2,17 +2,23 @@ services:
   - type: web
     name: malik-xgo-backend
     runtime: node
-    repo: https://github.com/Huzefa0786-hack/Malik.XGO.git
-    buildCommand: cd backend && npm install
-    startCommand: cd backend && node index.js
+    plan: free
+    buildCommand: |
+      cd server
+      npm install
+    startCommand: |
+      cd server
+      node index.js
     envVars:
-      - key: NODE_VERSION
-        value: 20.11.0
+      - key: NODE_ENV
+        value: production
       - key: PORT
         value: 10000
       - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
         sync: false
-    healthCheckPath: /api/health
-    autoDeploy: true
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
