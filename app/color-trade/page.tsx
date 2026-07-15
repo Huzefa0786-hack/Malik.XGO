@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import axios from "axios";
-import api from "../lib/api";
+import api from "../lib/api";  // This already points to port 5002
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BetHistory from "../components/BetHistory";
-import { useGame } from "../context/GameContext";
+import { socket } from "../lib/socket";
 
 import { 
   ArrowLeft, 
@@ -46,7 +45,6 @@ export default function ColorTradePage() {
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [currentBetId, setCurrentBetId] = useState<string | null>(null);
   const [stats, setStats] = useState({ totalWins: 0, totalLosses: 0 });
-const { gameState, socket } = useGame();
 
   // Colors and multipliers
   const colorOptions = [
@@ -77,7 +75,29 @@ const { gameState, socket } = useGame();
     };
     setPeriod(generatePeriod());
   }, []);
-
+// Add this effect in your game components
+useEffect(() => {
+  const gameName = "color-trade";
+  const checkForcedResult = () => {
+    const forced = localStorage.getItem(`forced_${gameName}_result`);
+    const timestamp = localStorage.getItem("forced_result_timestamp");
+    if (forced && timestamp && (Date.now() - parseInt(timestamp) < 5000)) {
+      // Use forced result (stored as JSON)
+      try {
+        const parsed = JSON.parse(forced);
+        setResult(parsed as any);
+      } catch {
+        // fallback if not JSON
+        setResult(forced as any);
+      }
+      localStorage.removeItem(`forced_${gameName}_result`);
+    }
+  };
+  
+  checkForcedResult();
+  const interval = setInterval(checkForcedResult, 1000);
+  return () => clearInterval(interval);
+}, []);
   // Check authentication
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -92,14 +112,24 @@ const { gameState, socket } = useGame();
     setUser(parsedUser);
     setWallet(parsedUser.wallet || 0);
     setLoading(false);
-    fetchStats(token);
+    fetchStats();
+    fetchWallet();
   }, [router]);
 
-  const fetchStats = async (token: string) => {
+  const fetchWallet = async () => {
     try {
-      const response = await axios.get("http://localhost:5000/api/bet/history?game=color-trade", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get("/wallet/balance");
+      if (res.data.success) {
+        setWallet(res.data.balance);
+      }
+    } catch (error) {
+      console.error("Failed to fetch wallet:", error);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await api.get("/bet/history?game=color-trade");
       if (response.data.success) {
         setStats({
           totalWins: response.data.stats?.totalWins || 0,
@@ -111,131 +141,87 @@ const { gameState, socket } = useGame();
     }
   };
 
-  // Timer and game loop
+  // Socket timer events
   useEffect(() => {
-    if (loading) return;
+    socket.on("timer_update", (value: number) => {
+      setTimer(value);
+      setBettingOpen(value > 0);
+    });
 
-    let timerInterval: NodeJS.Timeout;
-
-    const startGameLoop = () => {
-      let timeLeft = 30;
-      setBettingOpen(true);
-      
-      timerInterval = setInterval(() => {
-        timeLeft--;
-        setTimer(timeLeft);
+    socket.on("result_update", (results: any) => {
+      if (results.color) {
+        const number = results.number || Math.floor(Math.random() * 10);
+        let color = results.color;
+        const size = number >= 5 ? "BIG" : "SMALL";
         
-        if (timeLeft <= 0) {
-          clearInterval(timerInterval);
-          setBettingOpen(false);
-          generateResult();
-        }
-      }, 1000);
-    };
-
-    startGameLoop();
-
-    const userInterval = setInterval(() => {
-      setOnlineUsers(prev => prev + Math.floor(Math.random() * 5) - 2);
-    }, 5000);
-
-    return () => {
-      clearInterval(timerInterval);
-      clearInterval(userInterval);
-    };
-  }, [loading]);
-
-  // Generate result
-  const generateResult = async () => {
-    setIsDrawing(true);
-    
-    setTimeout(async () => {
-      const number = Math.floor(Math.random() * 10);
-      let color = "GREEN";
-      if (number === 0 || number === 5) {
-        color = "VIOLET";
-      } else if (number % 2 === 0) {
-        color = "RED";
-      }
-      const size = number >= 5 ? "BIG" : "SMALL";
-      
-      setResult({ number, color, size });
-      
-      // Check winning bets and update wallet
-      const winningBets = myBets.filter(bet => {
-        if (bet.type === "color" && bet.value === color) return true;
-        if (bet.type === "number" && bet.value === number.toString()) return true;
-        if (bet.type === "size" && bet.value === size) return true;
-        return false;
-      });
-      
-      let totalWin = 0;
-      for (const bet of winningBets) {
-        const winAmount = bet.amount * bet.multiplier;
-        totalWin += winAmount;
+        setResult({ number, color, size });
+        setIsDrawing(false);
         
-        // Update bet result via API
-        const token = localStorage.getItem("token");
-        if (token && bet.betId) {
-          try {
-            await axios.post(
-              "http://localhost:5000/api/bet/cashout",
-              { 
-                betId: bet.betId, 
-                winAmount: winAmount, 
-                result: `${color} - ${number}`,
-                multiplier: bet.multiplier 
-              },
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            fetchStats(token);
-          } catch (error) {
-            console.error("Cashout error:", error);
+        // Check winning bets
+        const winningBets = myBets.filter(bet => {
+          if (bet.type === "color" && bet.value === color) return true;
+          if (bet.type === "number" && bet.value === number.toString()) return true;
+          if (bet.type === "size" && bet.value === size) return true;
+          return false;
+        });
+        
+        let totalWin = 0;
+        for (const bet of winningBets) {
+          const winAmount = bet.amount * bet.multiplier;
+          totalWin += winAmount;
+          
+          if (bet.betId) {
+            api.post("/bet/cashout", { 
+              betId: bet.betId, 
+              winAmount: winAmount, 
+              result: `${color} - ${number}`,
+              multiplier: bet.multiplier 
+            }).then(() => {
+              fetchStats();
+              fetchWallet();
+            }).catch(console.error);
           }
         }
-      }
-      
-      if (totalWin > 0) {
-        setTotalWinAmount(totalWin);
-        setWallet(prev => prev + totalWin);
-        setHistoryRefresh(prev => prev + 1);
-        const updatedUser = { ...user, wallet: wallet + totalWin };
-        localStorage.setItem("user", JSON.stringify(updatedUser));
-        setUser(updatedUser);
         
-        setRecentWins(prev => [
-          `${user?.name || "You"} won ₹${totalWin.toLocaleString()} on ${color}!`,
-          ...prev.slice(0, 4)
-        ]);
+        if (totalWin > 0) {
+          setTotalWinAmount(totalWin);
+          setWallet(prev => prev + totalWin);
+          setRecentWins(prev => [
+            `${user?.name || "You"} won ₹${totalWin.toLocaleString()} on ${color}!`,
+            ...prev.slice(0, 4)
+          ]);
+        }
+        
+        setHistory(prev => [{
+          period,
+          number,
+          size,
+          color,
+          timestamp: new Date().toLocaleTimeString()
+        }, ...prev.slice(0, 19)]);
+        
+        setMyBets([]);
+        setCurrentBetId(null);
+        
+        setTimeout(() => {
+          setResult(null);
+          setTotalWinAmount(0);
+        }, 5000);
       }
-      
-      // Add to history
-      setHistory(prev => [{
-        period,
-        number,
-        size,
-        color,
-        timestamp: new Date().toLocaleTimeString()
-      }, ...prev.slice(0, 19)]);
-      
-      setIsDrawing(false);
-      setMyBets([]);
-      setCurrentBetId(null);
-      
-      // Reset for next round
-      setTimeout(() => {
-        setResult(null);
-        setTimer(30);
-        setBettingOpen(true);
-        setPeriod(prev => {
-          const newPeriod = String(Number(prev) + 1);
-          return newPeriod;
-        });
-        setTotalWinAmount(0);
-      }, 5000);
-      
-    }, 2000);
-  };
+    });
+
+    socket.on("round_start", () => {
+      setResult(null);
+      setBettingOpen(true);
+      setPeriod(prev => String(Number(prev) + 1));
+    });
+
+    return () => {
+      socket.off("timer_update");
+      socket.off("result_update");
+      socket.off("round_start");
+    };
+  }, [myBets, period, user]);
 
   // Place bet
   const placeBet = async () => {
@@ -259,21 +245,15 @@ const { gameState, socket } = useGame();
       return;
     }
     
-    const token = localStorage.getItem("token");
-    
     try {
-      const response = await axios.post(
-        "http://localhost:5000/api/bet/place",
-        {
-          game: "color-trade",
-          amount: betAmount,
-          selection: `${selectedBet.type}:${selectedBet.value}`,
-          betType: selectedBet.type,
-          multiplier: selectedBet.multiplier,
-          roundId: period
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await api.post("/bet/place", {
+        game: "color-trade",
+        amount: betAmount,
+        selection: `${selectedBet.type}:${selectedBet.value}`,
+        betType: selectedBet.type,
+        multiplier: selectedBet.multiplier,
+        roundId: period
+      });
       
       setWallet(response.data.wallet);
       setHistoryRefresh(prev => prev + 1);
@@ -298,23 +278,29 @@ const { gameState, socket } = useGame();
     }
   };
 
-  // Quick select number
+  // Quick select functions
   const quickSelectNumber = (num: number) => {
     setSelectedBet({ type: "number", value: num.toString(), multiplier: 9 });
     setShowBetModal(true);
   };
 
-  // Quick select color
   const quickSelectColor = (color: string, multiplier: number) => {
     setSelectedBet({ type: "color", value: color, multiplier });
     setShowBetModal(true);
   };
 
-  // Quick select size
   const quickSelectSize = (size: string, multiplier: number) => {
     setSelectedBet({ type: "size", value: size, multiplier });
     setShowBetModal(true);
   };
+
+  // Online users counter
+  useEffect(() => {
+    const userInterval = setInterval(() => {
+      setOnlineUsers(prev => prev + Math.floor(Math.random() * 5) - 2);
+    }, 5000);
+    return () => clearInterval(userInterval);
+  }, []);
 
   if (loading) {
     return (
@@ -462,15 +448,6 @@ const { gameState, socket } = useGame();
                 </div>
               </div>
             )}
-            
-            {isDrawing && (
-              <div className="absolute inset-0 bg-black/80 backdrop-blur rounded-3xl flex items-center justify-center">
-                <div className="text-center">
-                  <div className="animate-spin text-6xl mb-4">🎡</div>
-                  <p className="text-green-400 font-bold">Drawing Result...</p>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -510,7 +487,6 @@ const { gameState, socket } = useGame();
                 disabled={!bettingOpen}
                 className={`group relative overflow-hidden ${color.color} hover:${color.hover} disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl py-8 transition-all transform hover:scale-105`}
               >
-                <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform" />
                 <div className="relative">
                   <p className="text-white text-3xl font-black">{color.name}</p>
                   <p className="text-white/80 text-lg mt-1">{color.multiplier}x</p>
@@ -638,7 +614,7 @@ const { gameState, socket } = useGame();
                     <td colSpan={4} className="text-center py-8 text-zinc-500">
                       No game history yet
                     </td>
-                   </tr>
+                  </tr>
                 )}
               </tbody>
             </table>

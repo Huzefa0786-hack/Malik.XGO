@@ -37,6 +37,15 @@ export default function HomePage() {
   const [onlineUsers, setOnlineUsers] = useState(2847);
   const [todayWins, setTodayWins] = useState(128493);
   const [loading, setLoading] = useState(true);
+const [profileImage, setProfileImage] = useState<string | null>(null);
+
+// Load profile image from localStorage
+useEffect(() => {
+  const savedImage = localStorage.getItem("profileImage");
+  if (savedImage) {
+    setProfileImage(savedImage);
+  }
+}, []);
 
   // Fetch user data and verify token
   useEffect(() => {
@@ -58,7 +67,7 @@ export default function HomePage() {
 
   const fetchWalletBalance = async (token: string) => {
     try {
-      const response = await axios.get("http://localhost:5000/api/wallet/balance", {
+      const response = await axios.get("http://localhost:5002/api/wallet/balance", {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -127,11 +136,21 @@ export default function HomePage() {
           <div className="flex items-center gap-3">
             <div className="relative">
               <button
-                onClick={() => setShowProfile(!showProfile)}
-                className="w-12 h-12 rounded-full bg-green-500 text-black font-black"
-              >
-                {user?.name?.charAt(0)?.toUpperCase() || "👤"}
-              </button>
+  onClick={() => setShowProfile(!showProfile)}
+  className="w-12 h-12 rounded-full bg-linear-to-br from-green-500 to-green-700 flex items-center justify-center text-black font-black border-2 border-green-400/30 hover:border-green-400 transition-all overflow-hidden shadow-lg shadow-green-500/20"
+>
+  {profileImage ? (
+    <img 
+      src={profileImage} 
+      alt="Profile" 
+      className="w-full h-full object-cover"
+    />
+  ) : (
+    <span className="text-xl font-bold text-white">
+      {user?.name?.charAt(0)?.toUpperCase() || "U"}
+    </span>
+  )}
+</button>
 
               {showProfile && (
                 <div className="absolute right-0 mt-2 w-72 bg-zinc-900 border border-zinc-700 rounded-2xl p-4 shadow-2xl z-50">
@@ -220,7 +239,7 @@ export default function HomePage() {
 
               <div className="flex flex-wrap gap-4 justify-center">
                 <Link
-                  href="/numcards"
+                  href="/color-trade"
                   className="bg-green-500 text-black font-black px-8 py-4 rounded-2xl hover:bg-green-600 transition-colors"
                 >
                   PLAY NOW

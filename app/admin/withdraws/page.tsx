@@ -30,7 +30,7 @@ export default function WithdrawAdmin() {
   const fetchWithdraws = async () => {
     try {
       const res = await axios.get(
-        "http://localhost:5000/api/withdraw"
+        "http://localhost:5002/api/withdraw"
       );
 
       setWithdraws(res.data);
@@ -49,7 +49,7 @@ export default function WithdrawAdmin() {
   ) => {
     try {
       await axios.put(
-        `http://localhost:5000/api/withdraw/approve/${id}`
+        `http://localhost:5002/api/withdraw/approve/${id}`
       );
 
       fetchWithdraws();
@@ -64,7 +64,7 @@ export default function WithdrawAdmin() {
   ) => {
     try {
       await axios.put(
-        `http://localhost:5000/api/withdraw/reject/${id}`
+        `http://localhost:5002/api/withdraw/reject/${id}`
       );
 
       fetchWithdraws();

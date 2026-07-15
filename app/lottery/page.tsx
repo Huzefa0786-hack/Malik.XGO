@@ -50,7 +50,7 @@ const { gameState, socket } = useGame();
 
   const fetchStats = async (token: string) => {
     try {
-      const response = await axios.get("http://localhost:5000/api/bet/history?game=lottery", {
+      const response = await axios.get("http://localhost:5002/api/bet/history?game=lottery", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data.success) {
@@ -95,7 +95,7 @@ const { gameState, socket } = useGame();
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/api/bet/place",
+        "http://localhost:5002/api/bet/place",
         { 
           game: "lottery", 
           amount: cost, 
@@ -151,7 +151,7 @@ const { gameState, socket } = useGame();
         const token = localStorage.getItem("token");
         if (token) {
           await axios.post(
-            "http://localhost:5000/api/bet/cashout",
+            "http://localhost:5002/api/bet/cashout",
             { winAmount: winAmount, result: `${matchedNumbers.length} matches`, multiplier: matchedNumbers.length },
             { headers: { Authorization: `Bearer ${token}` } }
           );

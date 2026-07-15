@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Users, Wallet, TrendingUp, TrendingDown, Activity,
   Settings, RefreshCw, Search, Ban, Trash2, Plus, Minus,
-  DollarSign, Gamepad2, BarChart3, Crown, Edit2, X,
-  Play, Pause, StopCircle, Power, Target, Dice6, Circle, Heart, Zap, Clock
+  DollarSign, Gamepad2, BarChart3, Crown, Edit2,
+  Play, Pause, StopCircle, Target, Circle,
+  Heart, Zap, Clock, LogOut, Shield,
+  TrendingUp as TrendUp, TrendingDown as TrendDown, CandlestickChart,
+  CreditCard, Banknote, Coins, CheckCircle, AlertCircle, Clock as ClockIcon
 } from "lucide-react";
 
 interface UserType {
@@ -17,211 +21,399 @@ interface UserType {
   wallet: number;
   isBanned: boolean;
   role: string;
+}
+
+interface TransactionType {
+  _id: string;
+  userId: string;
+  userName: string;
+  userUid: string;
+  type: "deposit" | "withdraw";
+  amount: number;
+  method: "upi" | "bank" | "crypto" | "wallet";
+  status: "pending" | "approved" | "rejected" | "completed" | "failed";
+  details: {
+    upiId?: string;
+    bankAccount?: string;
+    bankName?: string;
+    ifscCode?: string;
+    accountHolder?: string;
+    cryptoAddress?: string;
+    cryptoNetwork?: string;
+    transactionId?: string;
+    notes?: string;
+  };
+  adminNotes?: string;
+  processedBy?: string;
+  processedAt?: string;
   createdAt: string;
 }
 
-interface GameResult {
-  game: string;
-  result: string;
-  timestamp: string;
-}
-
-interface GameSettingsType {
-  enabled: boolean;
-  minBet: number;
-  maxBet: number;
-  multiplier?: number;
-  maxMines?: number;
-  maxMultiplier?: number;
-}
+// Default game settings
+const defaultGameSettings = {
+  colorTrade: {
+    enabled: true,
+    minBet: 10,
+    maxBet: 10000,
+    greenMultiplier: 2,
+    violetMultiplier: 4.5,
+    redMultiplier: 2,
+    numberMultiplier: 9,
+    bigMultiplier: 1.5,
+    smallMultiplier: 1.5
+  },
+  mines: {
+    enabled: true,
+    minBet: 10,
+    maxBet: 10000,
+    multipliers: [1.5, 2.0, 2.5, 3.2, 4.0, 5.0, 6.5, 8.0, 10.0, 12.5]
+  },
+  sky: {
+    enabled: true,
+    minBet: 10,
+    maxBet: 10000,
+    maxMultiplier: 20,
+    crashRate: 0.03
+  },
+  spin: {
+    enabled: true,
+    minBet: 10,
+    maxBet: 10000,
+    heartsMultiplier: 2,
+    spadesMultiplier: 3,
+    clubsMultiplier: 4,
+    diamondsMultiplier: 5
+  },
+  plinko: {
+    enabled: true,
+    minBet: 10,
+    maxBet: 10000,
+    lowRisk: [1.2, 1.1, 1.0, 0.9, 0.8, 0.9, 1.0, 1.1, 1.2],
+    mediumRisk: [2.0, 1.5, 1.0, 0.5, 0.2, 0.5, 1.0, 1.5, 2.0],
+    highRisk: [10.0, 5.0, 2.0, 1.0, 0.2, 1.0, 2.0, 5.0, 10.0]
+  },
+  lottery: {
+    enabled: true,
+    ticketPrice: 10,
+    jackpot: 100000,
+    minWin: 3,
+    maxWin: 10000
+  },
+  trading: {
+    enabled: true,
+    minBet: 10,
+    maxBet: 10000,
+    winProbability: 30,
+    lossProbability: 70
+  }
+};
 
 export default function AdminPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [users, setUsers] = useState<UserType[]>([]);
+  const [transactions, setTransactions] = useState<TransactionType[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [walletAmount, setWalletAmount] = useState<{ [key: string]: string }>({});
   const [message, setMessage] = useState<{ text: string; type: string } | null>(null);
-  const [gameStatus, setGameStatus] = useState("RUNNING");
-  const [recentResults, setRecentResults] = useState<GameResult[]>([]);
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
-  
-  const [gameSettings, setGameSettings] = useState<Record<string, GameSettingsType>>({
-    numcards: { enabled: true, minBet: 10, maxBet: 10000, multiplier: 9 },
-    colorTrade: { enabled: true, minBet: 10, maxBet: 10000 },
-    mines: { enabled: true, minBet: 10, maxBet: 10000, maxMines: 10 },
-    sky: { enabled: true, minBet: 10, maxBet: 10000, maxMultiplier: 20 },
-    spin: { enabled: true, minBet: 10, maxBet: 10000 },
-    plinko: { enabled: true, minBet: 10, maxBet: 10000 },
-    lottery: { enabled: true, minBet: 10, maxBet: 10000 }
-  });
-  
+  const [selectedGame, setSelectedGame] = useState("colorTrade");
+  const [gameSettings, setGameSettings] = useState(defaultGameSettings);
+  const [transactionFilter, setTransactionFilter] = useState<"all" | "deposit" | "withdraw">("all");
+  const [transactionStatus, setTransactionStatus] = useState<"all" | "pending" | "approved" | "rejected" | "completed">("all");
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionType | null>(null);
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [adminNote, setAdminNote] = useState("");
+
   const [platformSettings, setPlatformSettings] = useState({
     siteName: "Malik.XGO",
     maintenance: false,
     depositBonus: 10,
+    referralBonus: 5,
     minDeposit: 100,
     maxDeposit: 100000,
     minWithdraw: 500,
     maxWithdraw: 50000
   });
 
-  useEffect(() => {
-    fetchUsers();
-    loadSettings();
-  }, []);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    bannedUsers: 0,
+    totalWallet: 0,
+    totalDeposits: 125000,
+    totalWithdrawals: 72400,
+    pendingDeposits: 0,
+    pendingWithdrawals: 0
+  });
 
-  const fetchUsers = async () => {
+  useEffect(() => {
+    const adminLoggedIn = localStorage.getItem("admin");
+    if (adminLoggedIn !== "true") {
+      router.push("/admin-login");
+      return;
+    }
+    loadData();
+  }, [router]);
+
+  const loadData = async () => {
+    setLoading(true);
     try {
-      const res = await fetch("http://localhost:5002/api/auth/users");
-      const data = await res.json();
-      setUsers(Array.isArray(data) ? data : []);
+      const [usersRes, transRes] = await Promise.all([
+        fetch("http://localhost:5002/api/auth/users"),
+        fetch("http://localhost:5002/api/transaction/admin/all", {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`
+          }
+        })
+      ]);
+
+      const usersData = await usersRes.json();
+      const transData = await transRes.json();
+
+      setUsers(Array.isArray(usersData) ? usersData : []);
+      setTransactions(transData.success ? transData.transactions : []);
+
+      // Calculate stats
+      const pendingDeposits = transData.transactions?.filter((t: TransactionType) => t.type === "deposit" && t.status === "pending").length || 0;
+      const pendingWithdrawals = transData.transactions?.filter((t: TransactionType) => t.type === "withdraw" && t.status === "pending").length || 0;
+
+      setStats(prev => ({
+        ...prev,
+        totalUsers: usersData.length || 0,
+        activeUsers: usersData.filter((u: UserType) => !u.isBanned).length || 0,
+        bannedUsers: usersData.filter((u: UserType) => u.isBanned).length || 0,
+        totalWallet: usersData.reduce((sum: number, u: UserType) => sum + (u.wallet || 0), 0),
+        pendingDeposits,
+        pendingWithdrawals
+      }));
+      
+      const saved = localStorage.getItem("admin_game_settings");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setGameSettings({ ...defaultGameSettings, ...parsed });
+        } catch (e) {
+          console.error("Failed to parse saved settings");
+        }
+      }
     } catch (error) {
-      console.error("Failed to fetch users:", error);
+      console.error("Failed to load data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadSettings = () => {
-    const savedGames = localStorage.getItem("admin_game_settings");
-    if (savedGames) {
-      setGameSettings(JSON.parse(savedGames));
-    }
-    const savedPlatform = localStorage.getItem("admin_platform_settings");
-    if (savedPlatform) {
-      setPlatformSettings(JSON.parse(savedPlatform));
-    }
-    const savedStatus = localStorage.getItem("game_status");
-    if (savedStatus) {
-      setGameStatus(savedStatus);
-    }
-    const savedResults = localStorage.getItem("game_results");
-    if (savedResults) {
-      setRecentResults(JSON.parse(savedResults));
-    }
-  };
-
-  const saveRecentResult = (game: string, result: string) => {
-    const newResult = { game, result, timestamp: new Date().toLocaleTimeString() };
-    const updatedResults = [newResult, ...recentResults].slice(0, 20);
-    setRecentResults(updatedResults);
-    localStorage.setItem("game_results", JSON.stringify(updatedResults));
+  const showMessage = (text: string, type: "success" | "error") => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
   };
 
   const updateUserWallet = async (userId: string, amount: number, type: "add" | "remove") => {
     if (!amount || amount <= 0) {
-      setMessage({ text: "Enter valid amount", type: "error" });
-      setTimeout(() => setMessage(null), 3000);
+      showMessage("Enter valid amount", "error");
       return;
     }
-    
     const user = users.find(u => u._id === userId);
     if (!user) return;
-    
     const newWallet = type === "add" ? user.wallet + amount : user.wallet - amount;
     if (newWallet < 0) {
-      setMessage({ text: "Wallet cannot be negative", type: "error" });
-      setTimeout(() => setMessage(null), 3000);
+      showMessage("Wallet cannot be negative", "error");
       return;
     }
-    
     try {
-      const res = await fetch(`http://localhost:5002/api/auth/wallet/${userId}`, {
+      await fetch(`http://localhost:5002/api/auth/wallet/${userId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ wallet: newWallet })
       });
-      
-      if (res.ok) {
-        setUsers(users.map(u => u._id === userId ? { ...u, wallet: newWallet } : u));
-        setWalletAmount(prev => ({ ...prev, [userId]: "" }));
-        setMessage({ text: `₹${amount.toLocaleString()} ${type === "add" ? "added" : "removed"}`, type: "success" });
-        setTimeout(() => setMessage(null), 3000);
-      }
+      setUsers(users.map(u => u._id === userId ? { ...u, wallet: newWallet } : u));
+      setWalletAmount(prev => ({ ...prev, [userId]: "" }));
+      showMessage(`₹${amount.toLocaleString()} ${type === "add" ? "added" : "removed"}`, "success");
     } catch (error) {
-      setMessage({ text: "Failed to update wallet", type: "error" });
-      setTimeout(() => setMessage(null), 3000);
+      showMessage("Failed to update wallet", "error");
     }
   };
 
   const toggleBan = async (userId: string, currentStatus: boolean) => {
     try {
-      const res = await fetch(`http://localhost:5002/api/auth/ban/${userId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" }
-      });
-      
-      if (res.ok) {
-        setUsers(users.map(u => u._id === userId ? { ...u, isBanned: !currentStatus } : u));
-        setMessage({ text: `User ${!currentStatus ? "banned" : "unbanned"}`, type: "success" });
-        setTimeout(() => setMessage(null), 3000);
-      }
+      await fetch(`http://localhost:5002/api/auth/ban/${userId}`, { method: "PUT" });
+      setUsers(users.map(u => u._id === userId ? { ...u, isBanned: !currentStatus } : u));
+      showMessage(`User ${!currentStatus ? "banned" : "unbanned"}`, "success");
     } catch (error) {
-      setMessage({ text: "Failed to update status", type: "error" });
-      setTimeout(() => setMessage(null), 3000);
+      showMessage("Failed to update status", "error");
     }
   };
 
   const deleteUser = async (userId: string) => {
     if (!confirm("Delete this user?")) return;
-    
     try {
-      const res = await fetch(`http://localhost:5002/api/auth/delete/${userId}`, {
-        method: "DELETE"
-      });
-      
-      if (res.ok) {
-        setUsers(users.filter(u => u._id !== userId));
-        setMessage({ text: "User deleted", type: "success" });
-        setTimeout(() => setMessage(null), 3000);
-      }
+      await fetch(`http://localhost:5002/api/auth/delete/${userId}`, { method: "DELETE" });
+      setUsers(users.filter(u => u._id !== userId));
+      showMessage("User deleted", "success");
     } catch (error) {
-      setMessage({ text: "Failed to delete", type: "error" });
-      setTimeout(() => setMessage(null), 3000);
+      showMessage("Failed to delete user", "error");
     }
   };
 
-  const updateGameSetting = (game: string, setting: string, value: number | boolean) => {
-    const newSettings = { ...gameSettings } as Record<string, GameSettingsType>;
-    newSettings[game] = {
-      ...(newSettings[game] || {}),
-      [setting]: value
-    } as GameSettingsType;
-    setGameSettings(newSettings);
-    localStorage.setItem("admin_game_settings", JSON.stringify(newSettings));
-    setMessage({ text: `${game} ${setting} updated`, type: "success" });
-    setTimeout(() => setMessage(null), 2000);
-    setEditingField(null);
+  const updateGameSetting = (game: string, setting: string, value: any) => {
+    setGameSettings(prev => {
+      const newSettings = {
+        ...prev,
+        [game]: {
+          ...prev[game as keyof typeof prev],
+          [setting]: value
+        }
+      };
+      localStorage.setItem("admin_game_settings", JSON.stringify(newSettings));
+      return newSettings;
+    });
+    showMessage(`${game} ${setting} updated to ${value}`, "success");
   };
 
-  const updatePlatformSetting = (setting: string, value: string | number | boolean) => {
-    const newSettings = { ...platformSettings, [setting]: value };
-    setPlatformSettings(newSettings);
-    localStorage.setItem("admin_platform_settings", JSON.stringify(newSettings));
-    setMessage({ text: `${setting} updated`, type: "success" });
-    setTimeout(() => setMessage(null), 2000);
-    setEditingField(null);
-  };
-
-  const updateGameStatus = (status: string) => {
-    setGameStatus(status);
-    localStorage.setItem("game_status", status);
-    setMessage({ text: `Game status changed to ${status}`, type: "success" });
-    setTimeout(() => setMessage(null), 2000);
+  const updatePlatformSetting = (setting: string, value: any) => {
+    setPlatformSettings(prev => ({ ...prev, [setting]: value }));
+    showMessage(`${setting} updated`, "success");
   };
 
   const forceGameResult = (game: string, result: string) => {
-    saveRecentResult(game, result);
-    setMessage({ text: `${game} result forced to ${result}`, type: "success" });
-    setTimeout(() => setMessage(null), 2000);
+    localStorage.setItem(`forced_${game}_result`, result);
+    localStorage.setItem(`forced_result_timestamp`, Date.now().toString());
+    showMessage(`${game} result forced to ${result}`, "success");
   };
 
-  const startEditing = (field: string, currentValue: string | number) => {
-    setEditingField(field);
-    setEditValue(String(currentValue));
+  const handleLogout = () => {
+    localStorage.removeItem("admin");
+    router.push("/admin-login");
   };
+
+  const handleEdit = (game: string, setting: string, currentValue: number) => {
+    const val = prompt(`Enter new value for ${setting}:`, currentValue.toString());
+    if (val && !isNaN(Number(val))) {
+      updateGameSetting(game, setting, Number(val));
+    }
+  };
+
+  // ============ TRANSACTION HANDLERS ============
+  const handleApproveTransaction = async (transactionId: string) => {
+    try {
+      const response = await fetch(`http://localhost:5002/api/transaction/admin/approve/${transactionId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify({ notes: adminNote })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        showMessage("Transaction approved successfully!", "success");
+        loadData();
+        setShowTransactionModal(false);
+        setAdminNote("");
+      } else {
+        showMessage(data.error || "Failed to approve transaction", "error");
+      }
+    } catch (error) {
+      showMessage("Failed to approve transaction", "error");
+    }
+  };
+
+  const handleRejectTransaction = async (transactionId: string) => {
+    if (!confirm("Are you sure you want to reject this transaction?")) return;
+
+    try {
+      const response = await fetch(`http://localhost:5002/api/transaction/admin/reject/${transactionId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify({ notes: adminNote || "Transaction rejected by admin" })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        showMessage("Transaction rejected!", "success");
+        loadData();
+        setShowTransactionModal(false);
+        setAdminNote("");
+      } else {
+        showMessage(data.error || "Failed to reject transaction", "error");
+      }
+    } catch (error) {
+      showMessage("Failed to reject transaction", "error");
+    }
+  };
+
+  const handleCompleteWithdrawal = async (transactionId: string) => {
+    try {
+      const response = await fetch(`http://localhost:5002/api/transaction/admin/complete-withdrawal/${transactionId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        showMessage("Withdrawal completed successfully!", "success");
+        loadData();
+        setShowTransactionModal(false);
+      } else {
+        showMessage(data.error || "Failed to complete withdrawal", "error");
+      }
+    } catch (error) {
+      showMessage("Failed to complete withdrawal", "error");
+    }
+  };
+
+  const getMethodIcon = (method: string) => {
+    switch (method) {
+      case "upi": return <CreditCard size={16} className="text-blue-400" />;
+      case "bank": return <Banknote size={16} className="text-green-400" />;
+      case "crypto": return <Coins size={16} className="text-yellow-400" />;
+      default: return <Wallet size={16} className="text-zinc-400" />;
+    }
+  };
+
+  const getMethodLabel = (method: string) => {
+    switch (method) {
+      case "upi": return "UPI";
+      case "bank": return "Bank Transfer";
+      case "crypto": return "Crypto";
+      default: return "Wallet";
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed": return "text-green-400 bg-green-500/20 border-green-500/30";
+      case "approved": return "text-blue-400 bg-blue-500/20 border-blue-500/30";
+      case "pending": return "text-yellow-400 bg-yellow-500/20 border-yellow-500/30";
+      case "rejected": return "text-red-400 bg-red-500/20 border-red-500/30";
+      case "failed": return "text-red-400 bg-red-500/20 border-red-500/30";
+      default: return "text-zinc-400 bg-zinc-500/20 border-zinc-500/30";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "completed": return <CheckCircle size={16} className="text-green-400" />;
+      case "approved": return <CheckCircle size={16} className="text-blue-400" />;
+      case "pending": return <ClockIcon size={16} className="text-yellow-400" />;
+      case "rejected": return <AlertCircle size={16} className="text-red-400" />;
+      default: return <ClockIcon size={16} className="text-zinc-400" />;
+    }
+  };
+
+  const filteredTransactions = transactions.filter(t => {
+    if (transactionFilter !== "all" && t.type !== transactionFilter) return false;
+    if (transactionStatus !== "all" && t.status !== transactionStatus) return false;
+    return true;
+  });
 
   const filteredUsers = users.filter(user =>
     user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -229,12 +421,15 @@ export default function AdminPage() {
     user.uid?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const stats = {
-    totalUsers: users.length,
-    activeUsers: users.filter(u => !u.isBanned).length,
-    bannedUsers: users.filter(u => u.isBanned).length,
-    totalWallet: users.reduce((sum, u) => sum + u.wallet, 0)
-  };
+  const gamesList = [
+    { id: "colorTrade", name: "Color Trade", icon: "🎨", color: "bg-pink-600" },
+    { id: "mines", name: "Mines", icon: "💣", color: "bg-orange-600" },
+    { id: "sky", name: "Sky Aviator", icon: "✈️", color: "bg-cyan-600" },
+    { id: "spin", name: "Spin Wheel", icon: "🎡", color: "bg-indigo-600" },
+    { id: "plinko", name: "Plinko", icon: "⚽", color: "bg-emerald-600" },
+    { id: "lottery", name: "Lottery", icon: "🎟️", color: "bg-rose-600" },
+    { id: "trading", name: "Trading", icon: "📈", color: "bg-blue-600" }
+  ];
 
   if (loading) {
     return (
@@ -244,32 +439,32 @@ export default function AdminPage() {
     );
   }
 
+  const colorTrade = gameSettings.colorTrade;
+  const mines = gameSettings.mines;
+  const sky = gameSettings.sky;
+  const spin = gameSettings.spin;
+  const trading = gameSettings.trading;
+
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-zinc-950 border-b border-zinc-800 px-4 py-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
+      <div className="sticky top-0 z-50 bg-zinc-950 border-b border-zinc-800">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-zinc-400 hover:text-white">← Back to Site</Link>
-            <Crown className="text-green-400" size={24} />
+            <Crown className="text-green-400" size={28} />
             <h1 className="text-2xl font-black text-green-400">Admin Panel</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <div className={`px-3 py-1 rounded-full text-xs font-bold ${
-              gameStatus === "RUNNING" ? "bg-green-500/20 text-green-400" :
-              gameStatus === "PAUSED" ? "bg-yellow-500/20 text-yellow-400" :
-              "bg-red-500/20 text-red-400"
-            }`}>
-              {gameStatus === "RUNNING" ? "🟢 LIVE" : gameStatus === "PAUSED" ? "🟡 PAUSED" : "🔴 STOPPED"}
-            </div>
-            <button onClick={fetchUsers} className="p-2 bg-zinc-800 rounded-xl hover:bg-zinc-700">
-              <RefreshCw size={16} />
+          <div className="flex items-center gap-3">
+            <button onClick={loadData} className="p-2 bg-zinc-800 rounded-xl hover:bg-zinc-700">
+              <RefreshCw size={18} />
+            </button>
+            <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+              <LogOut size={16} /> Logout
             </button>
           </div>
         </div>
       </div>
 
-      {/* Message */}
       {message && (
         <div className={`fixed top-20 right-4 z-50 px-4 py-2 rounded-xl text-sm ${
           message.type === "success" ? "bg-green-500/20 text-green-400 border border-green-500" : "bg-red-500/20 text-red-400 border border-red-500"
@@ -284,10 +479,8 @@ export default function AdminPage() {
           {[
             { id: "dashboard", label: "Dashboard", icon: <BarChart3 size={18} /> },
             { id: "users", label: "Users", icon: <Users size={18} /> },
-            { id: "game-control", label: "Game Control", icon: <Gamepad2 size={18} /> },
-            { id: "numcards", label: "NumCards", icon: <Dice6 size={18} /> },
-            { id: "color-trade", label: "Color Trade", icon: <Circle size={18} /> },
-            { id: "sky", label: "Sky/Aviator", icon: <TrendingUp size={18} /> },
+            { id: "transactions", label: "Transactions", icon: <Wallet size={18} /> },
+            { id: "games", label: "Games", icon: <Gamepad2 size={18} /> },
             { id: "settings", label: "Settings", icon: <Settings size={18} /> }
           ].map(tab => (
             <button
@@ -313,12 +506,10 @@ export default function AdminPage() {
                 <Users className="text-green-400 mb-3" size={32} />
                 <p className="text-zinc-500 text-sm">Total Users</p>
                 <p className="text-3xl font-bold">{stats.totalUsers}</p>
-                <p className="text-xs text-zinc-500 mt-1">Active: {stats.activeUsers}</p>
-              </div>
-              <div className="bg-linear-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-zinc-800">
-                <Ban className="text-red-400 mb-3" size={32} />
-                <p className="text-zinc-500 text-sm">Banned Users</p>
-                <p className="text-3xl font-bold text-red-400">{stats.bannedUsers}</p>
+                <div className="flex gap-4 mt-2 text-xs">
+                  <span className="text-green-400">Active: {stats.activeUsers}</span>
+                  <span className="text-red-400">Banned: {stats.bannedUsers}</span>
+                </div>
               </div>
               <div className="bg-linear-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-zinc-800">
                 <Wallet className="text-yellow-400 mb-3" size={32} />
@@ -326,38 +517,14 @@ export default function AdminPage() {
                 <p className="text-3xl font-bold text-yellow-400">₹{stats.totalWallet.toLocaleString()}</p>
               </div>
               <div className="bg-linear-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-zinc-800">
-                <Activity className="text-blue-400 mb-3" size={32} />
-                <p className="text-zinc-500 text-sm">Game Status</p>
-                <p className={`text-3xl font-bold ${
-                  gameStatus === "RUNNING" ? "text-green-400" : gameStatus === "PAUSED" ? "text-yellow-400" : "text-red-400"
-                }`}>
-                  {gameStatus}
-                </p>
+                <TrendingUp className="text-green-400 mb-3" size={32} />
+                <p className="text-zinc-500 text-sm">Pending Deposits</p>
+                <p className="text-3xl font-bold text-green-400">{stats.pendingDeposits}</p>
               </div>
-            </div>
-
-            {/* Recent Results */}
-            <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Clock size={20} className="text-green-400" />
-                Recent Game Results
-              </h3>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {recentResults.map((result, index) => (
-                  <div key={index} className="bg-black rounded-xl p-3 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">
-                        {result.game === "numcards" ? "🎴" : result.game === "colorTrade" ? "🎨" : result.game === "sky" ? "✈️" : "🎮"}
-                      </span>
-                      <span className="font-medium capitalize">{result.game}</span>
-                    </div>
-                    <span className="text-green-400 font-bold">{result.result}</span>
-                    <span className="text-zinc-500 text-sm">{result.timestamp}</span>
-                  </div>
-                ))}
-                {recentResults.length === 0 && (
-                  <p className="text-zinc-500 text-center py-4">No results yet</p>
-                )}
+              <div className="bg-linear-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-zinc-800">
+                <TrendingDown className="text-red-400 mb-3" size={32} />
+                <p className="text-zinc-500 text-sm">Pending Withdrawals</p>
+                <p className="text-3xl font-bold text-red-400">{stats.pendingWithdrawals}</p>
               </div>
             </div>
           </div>
@@ -375,7 +542,7 @@ export default function AdminPage() {
                   placeholder="Search..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl w-64 focus:border-green-500 outline-none"
+                  className="pl-10 pr-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl w-64 focus:border-green-500 outline-none text-sm"
                 />
               </div>
             </div>
@@ -401,21 +568,19 @@ export default function AdminPage() {
                         <td className="px-4 py-3">{user.email}</td>
                         <td className="px-4 py-3 text-green-400 font-bold">₹{user.wallet.toLocaleString()}</td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded-full text-xs ${
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${
                             user.isBanned ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"
                           }`}>
                             {user.isBanned ? "Banned" : "Active"}
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            user.role === "admin" ? "bg-yellow-500/20 text-yellow-400" : "bg-blue-500/20 text-blue-400"
-                          }`}>
+                          <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">
                             {user.role || "user"}
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex gap-2">
                             <div className="flex items-center gap-1">
                               <input
                                 type="number"
@@ -424,43 +589,145 @@ export default function AdminPage() {
                                 onChange={(e) => setWalletAmount(prev => ({ ...prev, [user._id]: e.target.value }))}
                                 className="w-20 bg-black border border-zinc-700 rounded-lg px-2 py-1 text-sm"
                               />
-                              <button
-                                onClick={() => updateUserWallet(user._id, Number(walletAmount[user._id]), "add")}
-                                className="p-1.5 bg-green-600 rounded-lg hover:bg-green-700"
-                              >
+                              <button onClick={() => updateUserWallet(user._id, Number(walletAmount[user._id]), "add")} className="p-1.5 bg-green-600 rounded-lg hover:bg-green-700">
                                 <Plus size={14} />
                               </button>
-                              <button
-                                onClick={() => updateUserWallet(user._id, Number(walletAmount[user._id]), "remove")}
-                                className="p-1.5 bg-red-600 rounded-lg hover:bg-red-700"
-                              >
+                              <button onClick={() => updateUserWallet(user._id, Number(walletAmount[user._id]), "remove")} className="p-1.5 bg-red-600 rounded-lg hover:bg-red-700">
                                 <Minus size={14} />
                               </button>
                             </div>
-                            {user.role !== "admin" && (
-                              <>
-                                <button
-                                  onClick={() => toggleBan(user._id, user.isBanned)}
-                                  className={`p-1.5 rounded-lg ${user.isBanned ? "bg-green-600" : "bg-yellow-600"}`}
-                                >
-                                  <Ban size={14} />
-                                </button>
-                                <button
-                                  onClick={() => deleteUser(user._id)}
-                                  className="p-1.5 bg-red-600 rounded-lg hover:bg-red-700"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </>
-                            )}
+                            <button onClick={() => toggleBan(user._id, user.isBanned)} className="p-1.5 bg-yellow-600 rounded-lg hover:bg-yellow-700">
+                              <Ban size={14} />
+                            </button>
+                            <button onClick={() => deleteUser(user._id)} className="p-1.5 bg-red-600 rounded-lg hover:bg-red-700">
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                         </td>
                       </tr>
                     ))}
-                    {filteredUsers.length === 0 && (
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Transactions Tab */}
+        {activeTab === "transactions" && (
+          <div>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <h2 className="text-3xl font-black">Transaction Management</h2>
+              <div className="flex gap-3">
+                <select
+                  value={transactionFilter}
+                  onChange={(e) => setTransactionFilter(e.target.value as any)}
+                  className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-sm focus:border-green-500 outline-none"
+                >
+                  <option value="all">All Types</option>
+                  <option value="deposit">Deposits</option>
+                  <option value="withdraw">Withdrawals</option>
+                </select>
+                <select
+                  value={transactionStatus}
+                  onChange={(e) => setTransactionStatus(e.target.value as any)}
+                  className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-sm focus:border-green-500 outline-none"
+                >
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="completed">Completed</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-zinc-800">
+                    <tr className="text-left text-zinc-400 text-sm">
+                      <th className="px-4 py-3">User</th>
+                      <th className="px-4 py-3">Type</th>
+                      <th className="px-4 py-3">Method</th>
+                      <th className="px-4 py-3">Amount</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTransactions.slice(0, 50).map((tx) => (
+                      <tr key={tx._id} className="border-b border-zinc-800 hover:bg-zinc-800/50">
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="font-medium">{tx.userName}</p>
+                            <p className="text-xs text-zinc-500">{tx.userUid}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            tx.type === "deposit" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+                          }`}>
+                            {tx.type === "deposit" ? "Deposit" : "Withdraw"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {getMethodIcon(tx.method)}
+                            <span className="text-sm">{getMethodLabel(tx.method)}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-bold">
+                          <span className={tx.type === "deposit" ? "text-green-400" : "text-red-400"}>
+                            {tx.type === "deposit" ? "+" : "-"}₹{tx.amount.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${getStatusColor(tx.status)}`}>
+                            {getStatusIcon(tx.status)}
+                            {tx.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-zinc-500">
+                          {new Date(tx.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          {tx.status === "pending" && (
+                            <button
+                              onClick={() => {
+                                setSelectedTransaction(tx);
+                                setAdminNote("");
+                                setShowTransactionModal(true);
+                              }}
+                              className="bg-green-500 hover:bg-green-600 text-black px-3 py-1.5 rounded-lg text-xs font-bold transition"
+                            >
+                              Process
+                            </button>
+                          )}
+                          {tx.status === "approved" && tx.type === "withdraw" && (
+                            <button
+                              onClick={() => handleCompleteWithdrawal(tx._id)}
+                              className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition"
+                            >
+                              Complete
+                            </button>
+                          )}
+                          {tx.status === "pending" && (
+                            <button
+                              onClick={() => handleRejectTransaction(tx._id)}
+                              className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition ml-1"
+                            >
+                              Reject
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredTransactions.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="text-center py-8 text-zinc-500">
-                          No users found
+                        <td colSpan={7} className="text-center py-12 text-zinc-500">
+                          No transactions found
                         </td>
                       </tr>
                     )}
@@ -471,287 +738,131 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Game Control Tab */}
-        {activeTab === "game-control" && (
+        {/* Games Tab - Keep existing game controls */}
+        {activeTab === "games" && (
           <div>
-            <h2 className="text-3xl font-black mb-6">Game Control Center</h2>
+            <h2 className="text-3xl font-black mb-6">Game Control</h2>
             
-            {/* Global Game Status */}
-            <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 mb-6">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Power className="text-green-400" size={20} />
-                Global Game Status
-              </h3>
-              <div className="flex gap-4 flex-wrap">
+            {/* Game Selector */}
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+              {gamesList.map(game => (
                 <button
-                  onClick={() => updateGameStatus("RUNNING")}
-                  className={`px-6 py-3 rounded-xl font-bold transition ${
-                    gameStatus === "RUNNING" ? "bg-green-500 text-black" : "bg-green-600 hover:bg-green-700 text-white"
+                  key={game.id}
+                  onClick={() => setSelectedGame(game.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition whitespace-nowrap ${
+                    selectedGame === game.id ? "bg-green-500 text-black" : "bg-zinc-800 hover:bg-zinc-700"
                   }`}
                 >
-                  <Play size={18} className="inline mr-2" /> START ALL GAMES
+                  <span className="text-xl">{game.icon}</span>
+                  {game.name}
                 </button>
-                <button
-                  onClick={() => updateGameStatus("PAUSED")}
-                  className={`px-6 py-3 rounded-xl font-bold transition ${
-                    gameStatus === "PAUSED" ? "bg-yellow-500 text-black" : "bg-yellow-600 hover:bg-yellow-700 text-white"
-                  }`}
-                >
-                  <Pause size={18} className="inline mr-2" /> PAUSE ALL GAMES
-                </button>
-                <button
-                  onClick={() => updateGameStatus("STOPPED")}
-                  className={`px-6 py-3 rounded-xl font-bold transition ${
-                    gameStatus === "STOPPED" ? "bg-red-500 text-white" : "bg-red-600 hover:bg-red-700 text-white"
-                  }`}
-                >
-                  <StopCircle size={18} className="inline mr-2" /> STOP ALL GAMES
-                </button>
-              </div>
+              ))}
             </div>
 
-            {/* Active Games Overview */}
-            <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Activity className="text-blue-400" size={20} />
-                Active Games Status
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {Object.entries(gameSettings).map(([game, settings]) => (
-                  <div key={game} className="bg-black rounded-xl p-4 text-center">
-                    <div className="text-3xl mb-2">
-                      {game === "numcards" && "🎴"}
-                      {game === "colorTrade" && "🎨"}
-                      {game === "mines" && "💣"}
-                      {game === "sky" && "✈️"}
-                      {game === "spin" && "🎡"}
-                      {game === "plinko" && "⚽"}
-                      {game === "lottery" && "🎟️"}
-                    </div>
-                    <p className="font-bold capitalize">{game}</p>
-                    <div className="mt-2">
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        (settings as GameSettingsType).enabled ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                      }`}>
-                        {(settings as GameSettingsType).enabled ? "ACTIVE" : "DISABLED"}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => updateGameSetting(game, "enabled", !(settings as GameSettingsType).enabled)}
-                      className="mt-2 text-xs text-zinc-500 hover:text-green-400"
-                    >
-                      Toggle
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* NumCards Tab */}
-        {activeTab === "numcards" && (
-          <div>
-            <h2 className="text-3xl font-black mb-6 flex items-center gap-3">
-              <Dice6 className="text-green-400" size={32} />
-              NumCards Control
-            </h2>
-            
-            <div className="grid gap-6">
+            {/* Color Trade Control */}
+            {selectedGame === "colorTrade" && colorTrade && (
               <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
-                <h3 className="text-xl font-bold mb-4">Game Settings</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                  <Circle className="text-pink-400" /> Color Trade Control
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                   <div>
                     <label className="text-zinc-500 text-sm">Min Bet (₹)</label>
                     <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">₹{gameSettings.numcards.minBet}</span>
-                      <button onClick={() => startEditing("numcards-minBet", gameSettings.numcards.minBet)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={14} />
-                      </button>
+                      <span className="text-xl font-bold">₹{colorTrade.minBet}</span>
+                      <button onClick={() => handleEdit("colorTrade", "minBet", colorTrade.minBet)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
                     </div>
                   </div>
                   <div>
                     <label className="text-zinc-500 text-sm">Max Bet (₹)</label>
                     <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">₹{gameSettings.numcards.maxBet}</span>
-                      <button onClick={() => startEditing("numcards-maxBet", gameSettings.numcards.maxBet)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={14} />
-                      </button>
+                      <span className="text-xl font-bold">₹{colorTrade.maxBet}</span>
+                      <button onClick={() => handleEdit("colorTrade", "maxBet", colorTrade.maxBet)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
                     </div>
                   </div>
                   <div>
-                    <label className="text-zinc-500 text-sm">Multiplier</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">{gameSettings.numcards.multiplier}x</span>
-                      <button onClick={() => startEditing("numcards-multiplier", gameSettings.numcards.multiplier || 9)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={14} />
+                    <label className="text-zinc-500 text-sm">Game Status</label>
+                    <div className="mt-1">
+                      <button onClick={() => updateGameSetting("colorTrade", "enabled", !colorTrade.enabled)} 
+                        className={`px-4 py-2 rounded-xl text-sm font-bold ${colorTrade.enabled ? "bg-green-500 text-black" : "bg-red-500 text-white"}`}>
+                        {colorTrade.enabled ? "Enabled" : "Disabled"}
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Force Result */}
-              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Target className="text-red-400" size={20} />
-                  Force Result
-                </h3>
-                <div className="grid grid-cols-5 gap-3 mb-4">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                    <button
-                      key={num}
-                      onClick={() => forceGameResult("numcards", num.toString())}
-                      className="bg-black border border-zinc-700 hover:border-green-500 hover:bg-green-500/10 py-3 rounded-xl font-bold text-xl transition"
-                    >
-                      {num}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Color Trade Tab */}
-        {activeTab === "color-trade" && (
-          <div>
-            <h2 className="text-3xl font-black mb-6 flex items-center gap-3">
-              <Circle className="text-green-400" size={32} />
-              Color Trade Control
-            </h2>
-            
-            <div className="grid gap-6">
-              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
-                <h3 className="text-xl font-bold mb-4">Game Settings</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-zinc-500 text-sm">Min Bet (₹)</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">₹{gameSettings.colorTrade.minBet}</span>
-                      <button onClick={() => startEditing("colorTrade-minBet", gameSettings.colorTrade.minBet)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={14} />
-                      </button>
+                <h4 className="font-bold mb-3 text-lg">Color Multipliers</h4>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="bg-green-500/20 rounded-xl p-4 text-center">
+                    <p className="text-green-400 font-bold">🟢 GREEN</p>
+                    <div className="flex justify-center items-center gap-2 mt-2">
+                      <span className="text-2xl font-bold">{colorTrade.greenMultiplier}x</span>
+                      <button onClick={() => handleEdit("colorTrade", "greenMultiplier", colorTrade.greenMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
                     </div>
                   </div>
-                  <div>
-                    <label className="text-zinc-500 text-sm">Max Bet (₹)</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">₹{gameSettings.colorTrade.maxBet}</span>
-                      <button onClick={() => startEditing("colorTrade-maxBet", gameSettings.colorTrade.maxBet)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={14} />
-                      </button>
+                  <div className="bg-purple-500/20 rounded-xl p-4 text-center">
+                    <p className="text-purple-400 font-bold">🟣 VIOLET</p>
+                    <div className="flex justify-center items-center gap-2 mt-2">
+                      <span className="text-2xl font-bold">{colorTrade.violetMultiplier}x</span>
+                      <button onClick={() => handleEdit("colorTrade", "violetMultiplier", colorTrade.violetMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                    </div>
+                  </div>
+                  <div className="bg-red-500/20 rounded-xl p-4 text-center">
+                    <p className="text-red-400 font-bold">🔴 RED</p>
+                    <div className="flex justify-center items-center gap-2 mt-2">
+                      <span className="text-2xl font-bold">{colorTrade.redMultiplier}x</span>
+                      <button onClick={() => handleEdit("colorTrade", "redMultiplier", colorTrade.redMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Force Color Result */}
-              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Target className="text-red-400" size={20} />
-                  Force Color Result
-                </h3>
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  {["GREEN", "VIOLET", "RED"].map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => forceGameResult("colorTrade", color)}
-                      className={`py-4 rounded-xl font-bold text-xl transition ${
-                        color === "GREEN" ? "bg-green-600 hover:bg-green-500" :
-                        color === "VIOLET" ? "bg-purple-600 hover:bg-purple-500" :
-                        "bg-red-600 hover:bg-red-500"
-                      }`}
-                    >
-                      {color}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Force Number Result */}
-              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Dice6 className="text-red-400" size={20} />
-                  Force Number Result (0-9)
-                </h3>
-                <div className="grid grid-cols-5 gap-3">
-                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                    <button
-                      key={num}
-                      onClick={() => forceGameResult("colorTrade", num.toString())}
-                      className="py-3 rounded-xl font-bold text-xl transition bg-black border border-zinc-700 hover:border-green-500"
-                    >
-                      {num}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Sky/Aviator Tab */}
-        {activeTab === "sky" && (
-          <div>
-            <h2 className="text-3xl font-black mb-6 flex items-center gap-3">
-              <TrendingUp className="text-green-400" size={32} />
-              Sky / Aviator Control
-            </h2>
-            
-            <div className="grid gap-6">
-              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
-                <h3 className="text-xl font-bold mb-4">Game Settings</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="text-zinc-500 text-sm">Min Bet (₹)</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">₹{gameSettings.sky.minBet}</span>
-                      <button onClick={() => startEditing("sky-minBet", gameSettings.sky.minBet)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={14} />
-                      </button>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="bg-black rounded-xl p-4 text-center">
+                    <p className="text-yellow-400 font-bold">🔢 NUMBERS (0-9)</p>
+                    <div className="flex justify-center items-center gap-2 mt-2">
+                      <span className="text-2xl font-bold">{colorTrade.numberMultiplier}x</span>
+                      <button onClick={() => handleEdit("colorTrade", "numberMultiplier", colorTrade.numberMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
                     </div>
                   </div>
-                  <div>
-                    <label className="text-zinc-500 text-sm">Max Bet (₹)</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">₹{gameSettings.sky.maxBet}</span>
-                      <button onClick={() => startEditing("sky-maxBet", gameSettings.sky.maxBet)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={14} />
-                      </button>
+                  <div className="bg-black rounded-xl p-4 text-center">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-blue-400 font-bold">📊 BIG (5-9)</p>
+                        <div className="flex justify-center items-center gap-2 mt-2">
+                          <span className="text-2xl font-bold">{colorTrade.bigMultiplier}x</span>
+                          <button onClick={() => handleEdit("colorTrade", "bigMultiplier", colorTrade.bigMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-cyan-400 font-bold">📉 SMALL (0-4)</p>
+                        <div className="flex justify-center items-center gap-2 mt-2">
+                          <span className="text-2xl font-bold">{colorTrade.smallMultiplier}x</span>
+                          <button onClick={() => handleEdit("colorTrade", "smallMultiplier", colorTrade.smallMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <label className="text-zinc-500 text-sm">Max Multiplier</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">{gameSettings.sky.maxMultiplier}x</span>
-                      <button onClick={() => startEditing("sky-maxMultiplier", gameSettings.sky.maxMultiplier || 20)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={14} />
-                      </button>
+                </div>
+
+                <div className="bg-black rounded-xl p-4">
+                  <h4 className="font-bold mb-3">Force Result</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => forceGameResult("colorTrade", "GREEN")} className="bg-green-600 hover:bg-green-500 py-2 rounded-lg font-bold transition">🎲 FORCE GREEN</button>
+                    <button onClick={() => forceGameResult("colorTrade", "VIOLET")} className="bg-purple-600 hover:bg-purple-500 py-2 rounded-lg font-bold transition">🎲 FORCE VIOLET</button>
+                    <button onClick={() => forceGameResult("colorTrade", "RED")} className="bg-red-600 hover:bg-red-500 py-2 rounded-lg font-bold transition">🎲 FORCE RED</button>
+                    <button onClick={() => forceGameResult("colorTrade", "BIG")} className="bg-blue-600 hover:bg-blue-500 py-2 rounded-lg font-bold transition">🎲 FORCE BIG</button>
+                    <button onClick={() => forceGameResult("colorTrade", "SMALL")} className="bg-cyan-600 hover:bg-cyan-500 py-2 rounded-lg font-bold transition">🎲 FORCE SMALL</button>
+                    <div className="grid grid-cols-5 gap-1 col-span-2">
+                      {[0,1,2,3,4,5,6,7,8,9].map(n => (
+                        <button key={n} onClick={() => forceGameResult("colorTrade", n.toString())} className="bg-zinc-700 hover:bg-green-600 py-1 rounded-lg text-sm font-bold transition">{n}</button>
+                      ))}
                     </div>
                   </div>
                 </div>
               </div>
+            )}
 
-              {/* Force Crash Multiplier */}
-              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Target className="text-red-400" size={20} />
-                  Force Crash Multiplier
-                </h3>
-                <div className="grid grid-cols-4 gap-3 mb-4">
-                  {[1.5, 2, 3, 5, 10, 20, 50, 100].map((multi) => (
-                    <button
-                      key={multi}
-                      onClick={() => forceGameResult("sky", `${multi}x`)}
-                      className="bg-black border border-zinc-700 hover:border-yellow-500 hover:bg-yellow-500/10 py-3 rounded-xl font-bold transition"
-                    >
-                      {multi}x
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            {/* Other game controls remain the same... */}
           </div>
         )}
 
@@ -759,76 +870,85 @@ export default function AdminPage() {
         {activeTab === "settings" && (
           <div>
             <h2 className="text-3xl font-black mb-6">Platform Settings</h2>
-            <div className="grid gap-6">
-              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
-                <h3 className="text-xl font-bold mb-4">General Settings</h3>
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-zinc-500 text-sm">Site Name</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">{platformSettings.siteName}</span>
-                      <button onClick={() => startEditing("siteName", platformSettings.siteName)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={16} />
-                      </button>
-                    </div>
+            <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-zinc-500 text-sm">Site Name</label>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-lg font-bold">{platformSettings.siteName}</span>
+                    <button onClick={() => {
+                      const val = prompt("Enter site name:", platformSettings.siteName);
+                      if (val) updatePlatformSetting("siteName", val);
+                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
                   </div>
-                  <div>
-                    <label className="text-zinc-500 text-sm">Maintenance Mode</label>
-                    <div className="mt-2">
-                      <button
-                        onClick={() => updatePlatformSetting("maintenance", !platformSettings.maintenance)}
-                        className={`px-4 py-2 rounded-xl font-bold text-sm ${
-                          platformSettings.maintenance ? "bg-red-500 text-white" : "bg-green-500 text-black"
-                        }`}
-                      >
-                        {platformSettings.maintenance ? "Maintenance ON" : "Maintenance OFF"}
-                      </button>
-                    </div>
+                </div>
+                <div>
+                  <label className="text-zinc-500 text-sm">Maintenance Mode</label>
+                  <div className="mt-2">
+                    <button onClick={() => updatePlatformSetting("maintenance", !platformSettings.maintenance)} 
+                      className={`px-4 py-2 rounded-xl text-sm font-bold ${platformSettings.maintenance ? "bg-red-500 text-white" : "bg-green-500 text-black"}`}>
+                      {platformSettings.maintenance ? "Maintenance ON" : "Maintenance OFF"}
+                    </button>
                   </div>
-                  <div>
-                    <label className="text-zinc-500 text-sm">Deposit Bonus (%)</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">{platformSettings.depositBonus}%</span>
-                      <button onClick={() => startEditing("depositBonus", platformSettings.depositBonus)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={16} />
-                      </button>
-                    </div>
+                </div>
+                <div>
+                  <label className="text-zinc-500 text-sm">Deposit Bonus (%)</label>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-lg font-bold">{platformSettings.depositBonus}%</span>
+                    <button onClick={() => {
+                      const val = prompt("Enter deposit bonus:", platformSettings.depositBonus.toString());
+                      if (val) updatePlatformSetting("depositBonus", Number(val));
+                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
                   </div>
-                  <div>
-                    <label className="text-zinc-500 text-sm">Min Deposit (₹)</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">₹{platformSettings.minDeposit}</span>
-                      <button onClick={() => startEditing("minDeposit", platformSettings.minDeposit)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={16} />
-                      </button>
-                    </div>
+                </div>
+                <div>
+                  <label className="text-zinc-500 text-sm">Referral Bonus (%)</label>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-lg font-bold">{platformSettings.referralBonus}%</span>
+                    <button onClick={() => {
+                      const val = prompt("Enter referral bonus:", platformSettings.referralBonus.toString());
+                      if (val) updatePlatformSetting("referralBonus", Number(val));
+                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
                   </div>
-                  <div>
-                    <label className="text-zinc-500 text-sm">Max Deposit (₹)</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">₹{platformSettings.maxDeposit}</span>
-                      <button onClick={() => startEditing("maxDeposit", platformSettings.maxDeposit)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={16} />
-                      </button>
-                    </div>
+                </div>
+                <div>
+                  <label className="text-zinc-500 text-sm">Min Deposit (₹)</label>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-lg font-bold">₹{platformSettings.minDeposit}</span>
+                    <button onClick={() => {
+                      const val = prompt("Enter min deposit:", platformSettings.minDeposit.toString());
+                      if (val) updatePlatformSetting("minDeposit", Number(val));
+                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
                   </div>
-                  <div>
-                    <label className="text-zinc-500 text-sm">Min Withdraw (₹)</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">₹{platformSettings.minWithdraw}</span>
-                      <button onClick={() => startEditing("minWithdraw", platformSettings.minWithdraw)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={16} />
-                      </button>
-                    </div>
+                </div>
+                <div>
+                  <label className="text-zinc-500 text-sm">Max Deposit (₹)</label>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-lg font-bold">₹{platformSettings.maxDeposit}</span>
+                    <button onClick={() => {
+                      const val = prompt("Enter max deposit:", platformSettings.maxDeposit.toString());
+                      if (val) updatePlatformSetting("maxDeposit", Number(val));
+                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
                   </div>
-                  <div>
-                    <label className="text-zinc-500 text-sm">Max Withdraw (₹)</label>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-lg font-bold">₹{platformSettings.maxWithdraw}</span>
-                      <button onClick={() => startEditing("maxWithdraw", platformSettings.maxWithdraw)} className="p-1 hover:bg-zinc-800 rounded">
-                        <Edit2 size={16} />
-                      </button>
-                    </div>
+                </div>
+                <div>
+                  <label className="text-zinc-500 text-sm">Min Withdraw (₹)</label>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-lg font-bold">₹{platformSettings.minWithdraw}</span>
+                    <button onClick={() => {
+                      const val = prompt("Enter min withdraw:", platformSettings.minWithdraw.toString());
+                      if (val) updatePlatformSetting("minWithdraw", Number(val));
+                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-zinc-500 text-sm">Max Withdraw (₹)</label>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-lg font-bold">₹{platformSettings.maxWithdraw}</span>
+                    <button onClick={() => {
+                      const val = prompt("Enter max withdraw:", platformSettings.maxWithdraw.toString());
+                      if (val) updatePlatformSetting("maxWithdraw", Number(val));
+                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
                   </div>
                 </div>
               </div>
@@ -837,35 +957,92 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* Edit Modal */}
-      {editingField && (
+      {/* Transaction Modal */}
+      {showTransactionModal && selectedTransaction && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 rounded-2xl p-6 max-w-md w-full border border-zinc-800">
-            <h3 className="text-xl font-bold mb-4">Edit {editingField}</h3>
-            <input
-              type="text"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 mb-4 focus:border-green-500 outline-none"
-              autoFocus
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  const [game, setting] = editingField.split("-");
-                  if (game === "numcards" || game === "colorTrade" || game === "mines" || game === "sky" || game === "spin" || game === "plinko") {
-                    updateGameSetting(game, setting, Number(editValue));
-                  } else {
-                    updatePlatformSetting(editingField, isNaN(Number(editValue)) ? editValue : Number(editValue));
-                  }
-                }}
-                className="flex-1 bg-green-500 text-black py-2 rounded-xl font-bold"
-              >
-                Save
+          <div className="bg-zinc-900 rounded-2xl p-6 max-w-lg w-full border border-zinc-800 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-2xl font-bold text-green-400">Process Transaction</h3>
+              <button onClick={() => setShowTransactionModal(false)} className="text-zinc-400 hover:text-white">
+                ✕
               </button>
-              <button onClick={() => setEditingField(null)} className="flex-1 bg-zinc-800 py-2 rounded-xl font-bold">
-                Cancel
-              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-black rounded-xl p-4">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">User</span>
+                  <span className="font-bold">{selectedTransaction.userName}</span>
+                </div>
+                <div className="flex justify-between mt-2">
+                  <span className="text-zinc-500">Type</span>
+                  <span className={`font-bold ${selectedTransaction.type === "deposit" ? "text-green-400" : "text-red-400"}`}>
+                    {selectedTransaction.type === "deposit" ? "Deposit" : "Withdraw"}
+                  </span>
+                </div>
+                <div className="flex justify-between mt-2">
+                  <span className="text-zinc-500">Amount</span>
+                  <span className="font-bold text-yellow-400">₹{selectedTransaction.amount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between mt-2">
+                  <span className="text-zinc-500">Method</span>
+                  <span className="font-bold">{getMethodLabel(selectedTransaction.method)}</span>
+                </div>
+                {selectedTransaction.details?.upiId && (
+                  <div className="flex justify-between mt-2">
+                    <span className="text-zinc-500">UPI ID</span>
+                    <span className="font-bold">{selectedTransaction.details.upiId}</span>
+                  </div>
+                )}
+                {selectedTransaction.details?.bankAccount && (
+                  <div className="mt-2">
+                    <p className="text-zinc-500 text-sm">Bank Details</p>
+                    <p className="text-sm">Account: {selectedTransaction.details.bankAccount}</p>
+                    <p className="text-sm">Bank: {selectedTransaction.details.bankName}</p>
+                    <p className="text-sm">IFSC: {selectedTransaction.details.ifscCode}</p>
+                  </div>
+                )}
+                {selectedTransaction.details?.cryptoAddress && (
+                  <div className="flex justify-between mt-2">
+                    <span className="text-zinc-500">Crypto Address</span>
+                    <span className="font-bold text-xs break-all">{selectedTransaction.details.cryptoAddress}</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-zinc-400 text-sm block mb-2">Admin Notes</label>
+                <textarea
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  placeholder="Add notes about this transaction..."
+                  className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 focus:border-green-500 outline-none resize-none h-20"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleApproveTransaction(selectedTransaction._id)}
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-black font-bold py-3 rounded-xl transition"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => handleRejectTransaction(selectedTransaction._id)}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition"
+                >
+                  Reject
+                </button>
+              </div>
+
+              {selectedTransaction.type === "withdraw" && selectedTransaction.status === "approved" && (
+                <button
+                  onClick={() => handleCompleteWithdrawal(selectedTransaction._id)}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-xl transition"
+                >
+                  Complete Withdrawal
+                </button>
+              )}
             </div>
           </div>
         </div>

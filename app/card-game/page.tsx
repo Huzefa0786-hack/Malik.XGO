@@ -86,7 +86,7 @@ export default function CardGamePage() {
 
   const fetchStats = async (token: string) => {
     try {
-      const response = await axios.get("http://localhost:5000/api/bet/history?game=card-game", {
+      const response = await axios.get("http://localhost:5002/api/bet/history?game=card-game", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data.success) {
@@ -184,7 +184,7 @@ export default function CardGamePage() {
       }
 
       const response = await axios.post(
-        "http://localhost:5000/api/bet/place",
+        "http://localhost:5002/api/bet/place",
         {
           game: "card-game",
           amount: betAmount,
@@ -241,7 +241,7 @@ export default function CardGamePage() {
       const token = localStorage.getItem("token");
       try {
         const cashoutResponse = await axios.post(
-          "http://localhost:5000/api/bet/cashout",
+          "http://localhost:5002/api/bet/cashout",
           { 
             betId: currentBetId, 
             winAmount: winAmount, 

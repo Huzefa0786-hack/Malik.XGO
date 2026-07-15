@@ -29,7 +29,7 @@ export default function DepositAdmin() {
   const fetchDeposits = async () => {
     try {
       const res = await axios.get(
-        "http://localhost:5000/api/deposit"
+        "http://localhost:5002/api/deposit"
       );
 
       setDeposits(res.data);
@@ -48,7 +48,7 @@ export default function DepositAdmin() {
   ) => {
     try {
       await axios.put(
-        `http://localhost:5000/api/deposit/approve/${id}`
+        `http://localhost:5002/api/deposit/approve/${id}`
       );
 
       fetchDeposits();
@@ -63,7 +63,7 @@ export default function DepositAdmin() {
   ) => {
     try {
       await axios.put(
-        `http://localhost:5000/api/deposit/reject/${id}`
+        `http://localhost:5002/api/deposit/reject/${id}`
       );
 
       fetchDeposits();

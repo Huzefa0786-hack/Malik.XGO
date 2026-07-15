@@ -3,6 +3,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { io, Socket } from "socket.io-client";
 
+// CHANGE: Use port 5002 instead of 5000
+const SOCKET_URL = 'http://localhost:5002';
+
 interface GameState {
   timer: number;
   lastResult: any;
@@ -30,23 +33,43 @@ export function GameProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    const newSocket = io("http://localhost:5000");
+    // CHANGE: Connect to port 5002
+    const newSocket = io(SOCKET_URL, {
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      transports: ['websocket', 'polling']
+    });
+
     setSocket(newSocket);
 
-    newSocket.on("timer_update", (value: number) => {
+    newSocket.on('connect', () => {
+      console.log('✅ Socket connected to port 5002');
+    });
+
+    newSocket.on('timer_update', (value: number) => {
       setGameState(prev => ({ ...prev, timer: value, isBettingOpen: value > 0 }));
     });
 
-    newSocket.on("result_update", (result: any) => {
+    newSocket.on('result_update', (result: any) => {
       setGameState(prev => ({ ...prev, lastResult: result, roundId: `round-${Date.now()}` }));
     });
 
-    newSocket.on("round_start", (roundId: string) => {
+    newSocket.on('round_start', (roundId: string) => {
       setGameState(prev => ({ ...prev, roundId, timer: 30, isBettingOpen: true }));
     });
 
-    newSocket.on("game_status", (status: "RUNNING" | "PAUSED" | "STOPPED") => {
+    newSocket.on('game_status', (status: "RUNNING" | "PAUSED" | "STOPPED") => {
       setGameState(prev => ({ ...prev, gameStatus: status }));
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+    });
+
+    newSocket.on('disconnect', () => {
+      console.log('Socket disconnected');
     });
 
     return () => {

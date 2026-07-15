@@ -39,7 +39,7 @@ export default function SetNewPasswordPage() {
       setLoading(true);
       
       const res = await axios.post(
-        "http://localhost:5000/api/auth/reset-password",
+        "http://localhost:5002/api/auth/reset-password",
         { 
           username, 
           newPassword,

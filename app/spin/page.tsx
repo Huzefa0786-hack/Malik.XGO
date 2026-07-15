@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import axios from "axios";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import api from "../lib/api";
 import BetHistory from "../components/BetHistory";
 import { ArrowLeft, Wallet, Trophy, Timer, History, TrendingUp, Award } from "lucide-react";
-import { useGame } from "../context/GameContext";
 
 export default function SpinningWheelPage() {
   const router = useRouter();
@@ -21,16 +20,11 @@ export default function SpinningWheelPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const [currentBetId, setCurrentBetId] = useState<string | null>(null);
-  const [stats, setStats] = useState({ totalWins: 0, totalLosses: 0 });
   const [wheelRotation, setWheelRotation] = useState(0);
-  const [predictedSegment, setPredictedSegment] = useState<string | null>(null);
-  
-  const { gameState, socket } = useGame();
 
   const multipliers: Record<string, number> = { hearts: 2, spades: 3, clubs: 4, diamonds: 5 };
   const cards = ["hearts", "spades", "clubs", "diamonds"];
   const cardSymbols: Record<string, string> = { hearts: "♥", spades: "♠", clubs: "♣", diamonds: "♦" };
-  const cardColors: Record<string, string> = { hearts: "text-red-500", spades: "text-gray-400", clubs: "text-green-400", diamonds: "text-blue-500" };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -45,22 +39,17 @@ export default function SpinningWheelPage() {
     setUser(parsedUser);
     setWallet(parsedUser.wallet || 0);
     setLoading(false);
-    fetchStats(token);
+    fetchWallet();
   }, [router]);
 
-  const fetchStats = async (token: string) => {
+  const fetchWallet = async () => {
     try {
-      const response = await axios.get("http://localhost:5000/api/bet/history?game=spin", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.data.success) {
-        setStats({
-          totalWins: response.data.stats?.totalWins || 0,
-          totalLosses: response.data.stats?.totalLosses || 0
-        });
+      const res = await api.get("/wallet/balance");
+      if (res.data.success) {
+        setWallet(res.data.balance);
       }
     } catch (error) {
-      console.error("Failed to fetch stats:", error);
+      console.error("Failed to fetch wallet:", error);
     }
   };
 
@@ -83,28 +72,20 @@ export default function SpinningWheelPage() {
     }
 
     setIsSpinning(true);
-    setPredictedSegment(selectedCard);
-    
-    const token = localStorage.getItem("token");
     
     try {
       // Place bet
-      const betResponse = await axios.post(
-        "http://localhost:5000/api/bet/place",
-        {
-          game: "spin",
-          amount: Number(betAmount),
-          selection: selectedCard,
-          betType: "card",
-          multiplier: multipliers[selectedCard],
-          roundId: `spin-${Date.now()}`
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const betResponse = await api.post("/bet/place", {
+        game: "spin",
+        amount: Number(betAmount),
+        selection: selectedCard,
+        betType: "card",
+        multiplier: multipliers[selectedCard],
+        roundId: `spin-${Date.now()}`
+      });
       
       setWallet(betResponse.data.wallet);
       setCurrentBetId(betResponse.data.betId);
-      setHistoryRefresh(prev => prev + 1);
       
       const updatedUser = { ...user, wallet: betResponse.data.wallet };
       localStorage.setItem("user", JSON.stringify(updatedUser));
@@ -123,39 +104,34 @@ export default function SpinningWheelPage() {
         const isWin = selectedCard === randomResult;
         const winAmount = isWin ? Number(betAmount) * multipliers[randomResult] : 0;
         
-        try {
-          const cashoutResponse = await axios.post(
-            "http://localhost:5000/api/bet/cashout",
-            { betId: currentBetId, winAmount: winAmount, result: randomResult, multiplier: multipliers[randomResult] },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          
-          setWallet(cashoutResponse.data.wallet);
-          setHistoryRefresh(prev => prev + 1);
-          fetchStats(token!);
-          
-          const updatedUserData = { ...user, wallet: cashoutResponse.data.wallet };
-          localStorage.setItem("user", JSON.stringify(updatedUserData));
-          setUser(updatedUserData);
-          
-          if (isWin) {
-            setLastWin(winAmount);
-            alert(`🎉 Congratulations! You won ₹${winAmount.toLocaleString()}! 🎉`);
-          } else {
-            setLastWin(0);
-            alert(`😢 You lost! Result was ${randomResult.toUpperCase()}`);
-          }
-          
-          setBetAmount("");
-          setSelectedCard("");
-          setIsSpinning(false);
-          setCurrentBetId(null);
-          setPredictedSegment(null);
-          
-        } catch (error: any) {
-          alert(error.response?.data?.error || "Game failed");
-          setIsSpinning(false);
+        const cashoutResponse = await api.post("/bet/cashout", {
+          betId: currentBetId,
+          winAmount: winAmount,
+          result: randomResult,
+          multiplier: multipliers[randomResult]
+        });
+        
+        setWallet(cashoutResponse.data.wallet);
+        fetchWallet();
+        setHistoryRefresh(prev => prev + 1);
+        
+        const updatedUserData = { ...user, wallet: cashoutResponse.data.wallet };
+        localStorage.setItem("user", JSON.stringify(updatedUserData));
+        setUser(updatedUserData);
+        
+        if (isWin) {
+          setLastWin(winAmount);
+          alert(`🎉 Congratulations! You won ₹${winAmount.toLocaleString()}! 🎉`);
+        } else {
+          setLastWin(0);
+          alert(`😢 You lost! Result was ${randomResult.toUpperCase()}`);
         }
+        
+        setBetAmount("");
+        setSelectedCard("");
+        setIsSpinning(false);
+        setCurrentBetId(null);
+        
       }, 2000);
       
     } catch (error: any) {
@@ -196,23 +172,22 @@ export default function SpinningWheelPage() {
           </button>
         </div>
 
-        {/* Stats Cards */}
         <div className="grid lg:grid-cols-5 gap-4 mb-10">
+          <div className="bg-linear-to-r from-zinc-900 to-black border border-zinc-800 rounded-2xl p-5">
+            <div className="flex items-center gap-3">
+              <Timer className="text-green-400" size={24} />
+              <div>
+                <p className="text-zinc-500 text-sm">Spin Timer</p>
+                <h2 className="text-3xl font-black text-green-400">30s</h2>
+              </div>
+            </div>
+          </div>
           <div className="bg-linear-to-r from-zinc-900 to-black border border-zinc-800 rounded-2xl p-5">
             <div className="flex items-center gap-3">
               <Wallet className="text-green-400" size={24} />
               <div>
                 <p className="text-zinc-500 text-sm">Wallet</p>
                 <h2 className="text-3xl font-black text-green-400">₹{wallet.toLocaleString()}</h2>
-              </div>
-            </div>
-          </div>
-          <div className="bg-linear-to-r from-yellow-900/20 to-black border border-yellow-500/30 rounded-2xl p-5">
-            <div className="flex items-center gap-3">
-              <Award className="text-yellow-400" size={24} />
-              <div>
-                <p className="text-zinc-500 text-sm">Last Win</p>
-                <h2 className="text-2xl font-black text-yellow-400">₹{lastWin.toLocaleString()}</h2>
               </div>
             </div>
           </div>
@@ -225,28 +200,24 @@ export default function SpinningWheelPage() {
               </div>
             </div>
           </div>
+          <div className="bg-linear-to-r from-yellow-900/20 to-black border border-yellow-500/30 rounded-2xl p-5">
+            <div className="flex items-center gap-3">
+              <Award className="text-yellow-400" size={24} />
+              <div>
+                <p className="text-zinc-500 text-sm">Last Win</p>
+                <h2 className="text-3xl font-black text-yellow-400">₹{lastWin.toLocaleString()}</h2>
+              </div>
+            </div>
+          </div>
           <div className="bg-linear-to-r from-purple-900/20 to-black border border-purple-500/30 rounded-2xl p-5">
             <div className="flex items-center gap-3">
               <TrendingUp className="text-purple-400" size={24} />
               <div>
-                <p className="text-zinc-500 text-sm">Win Rate</p>
-                <h2 className="text-2xl font-black text-purple-400">
-                  {stats.totalWins + stats.totalLosses > 0 
-                    ? Math.round((stats.totalWins / (stats.totalWins + stats.totalLosses)) * 100) 
-                    : 0}%
-                </h2>
-              </div>
-            </div>
-          </div>
-          <div className="bg-linear-to-r from-blue-900/20 to-black border border-blue-500/30 rounded-2xl p-5">
-            <div className="flex items-center gap-3">
-              <Timer className="text-blue-400" size={24} />
-              <div>
                 <p className="text-zinc-500 text-sm">Win/Loss</p>
                 <h2 className="text-xl font-black">
-                  <span className="text-green-400">{stats.totalWins}</span>
-                  <span className="text-zinc-600"> / </span>
-                  <span className="text-red-400">{stats.totalLosses}</span>
+                  <span className="text-green-400">0</span>
+                  <span className="text-zinc-600">/</span>
+                  <span className="text-red-400">0</span>
                 </h2>
               </div>
             </div>
@@ -259,38 +230,26 @@ export default function SpinningWheelPage() {
           
           <div className="flex justify-center mb-10">
             <div 
-              className="relative w-96 h-96 rounded-full border-8 border-zinc-700 overflow-hidden transition-transform duration-2000 ease-out"
+              className="relative w-96 h-96 rounded-full border-8 border-zinc-700 overflow-hidden transition-all duration-2000 ease-out"
               style={{ transform: `rotate(${wheelRotation}deg)` }}
             >
-              {/* Wheel segments */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1/2 bg-linear-to-b from-red-500 to-red-600 flex items-center justify-center">
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1/2 bg-red-500 flex items-center justify-center">
                 <span className="text-7xl font-black text-white">♥</span>
               </div>
-              <div className="absolute top-1/2 left-0 -translate-y-1/2 w-1/2 h-1/2 bg-linear-to-r from-gray-800 to-gray-900 flex items-center justify-center">
+              <div className="absolute top-1/2 left-0 -translate-y-1/2 w-1/2 h-1/2 bg-gray-800 flex items-center justify-center">
                 <span className="text-7xl font-black text-white">♠</span>
               </div>
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-1/2 bg-linear-to-t from-green-500 to-green-600 flex items-center justify-center">
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-1/2 bg-green-500 flex items-center justify-center">
                 <span className="text-7xl font-black text-white">♣</span>
               </div>
-              <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1/2 h-1/2 bg-linear-to-l from-blue-500 to-blue-600 flex items-center justify-center">
+              <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1/2 h-1/2 bg-blue-500 flex items-center justify-center">
                 <span className="text-7xl font-black text-white">♦</span>
               </div>
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-20 h-20 rounded-full bg-black border-4 border-white z-50 shadow-xl" />
+                <div className="w-20 h-20 rounded-full bg-black border-4 border-white z-50" />
               </div>
             </div>
           </div>
-
-          {/* Prediction Arrow */}
-          {predictedSegment && (
-            <div className="text-center mb-6">
-              <div className="inline-block bg-green-500/20 border border-green-500 rounded-xl px-6 py-3">
-                <p className="text-green-400 font-bold">
-                  🎯 Predicting: {predictedSegment.toUpperCase()} {cardSymbols[predictedSegment]}
-                </p>
-              </div>
-            </div>
-          )}
 
           {/* Card Selection */}
           <div className="grid md:grid-cols-4 gap-4 mb-8">
@@ -300,7 +259,7 @@ export default function SpinningWheelPage() {
                 onClick={() => setSelectedCard(card.name)}
                 className={`h-32 rounded-2xl border-2 transition-all transform hover:scale-105 flex flex-col items-center justify-center ${
                   selectedCard === card.name 
-                    ? `${card.bg} ${card.border} scale-105 shadow-lg shadow-green-500/20`
+                    ? `${card.bg} ${card.border} scale-105 shadow-lg`
                     : "bg-zinc-800 border-zinc-700 hover:border-green-500"
                 }`}
               >
@@ -358,10 +317,7 @@ export default function SpinningWheelPage() {
           </div>
         </div>
 
-        {/* Bet History */}
-        {showHistory && (
-          <BetHistory game="spin" refreshTrigger={historyRefresh} />
-        )}
+        {showHistory && <BetHistory game="spin" refreshTrigger={historyRefresh} />}
       </div>
     </main>
   );

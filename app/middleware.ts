@@ -1,31 +1,27 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
-  const token = request.cookies.get('token')?.value || 
-                request.headers.get('authorization')?.replace('Bearer ', '');
+  const { pathname } = request.nextUrl;
   
-  const publicPaths = ['/login', '/register', '/reset-password'];
-  const isPublicPath = publicPaths.includes(request.nextUrl.pathname);
-  
-  if (!token && !isPublicPath) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  // Only protect /admin route
+  if (pathname.startsWith("/admin")) {
+    // Skip admin-login page
+    if (pathname === "/admin-login") {
+      return NextResponse.next();
+    }
+    
+    const adminLoggedIn = request.cookies.get("admin")?.value;
+    
+    if (!adminLoggedIn || adminLoggedIn !== "true") {
+      const url = new URL("/admin-login", request.url);
+      return NextResponse.redirect(url);
+    }
   }
   
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    '/',
-    '/profile/:path*',
-    '/deposit/:path*',
-    '/withdraw/:path*',
-    '/numcards/:path*',
-    '/mines/:path*',
-    '/sky/:path*',
-    '/spin/:path*',
-    '/lottery/:path*',
-    '/plinko/:path*',
-  ],
+  matcher: ["/admin/:path*", "/admin"],
 };

@@ -2,53 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import Matter from "matter-js";
-import axios from "axios";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import api from "../lib/api";
 import BetHistory from "../components/BetHistory";
-import { ArrowLeft, Wallet, Trophy, TrendingUp, Play, History, Plus, Minus, Layers } from "lucide-react";
-import { useGame } from "../context/GameContext";
+import { ArrowLeft, Wallet, Trophy, TrendingUp, Play, History, Layers } from "lucide-react";
 
 const WIDTH = 800;
 const HEIGHT = 700;
 
-// LOW RISK - Mostly small wins, rarely lose
-const LOW_RISK_MULTIPLIERS = [
-  { value: 0.8, chance: 10 },
-  { value: 0.9, chance: 15 },
-  { value: 1.0, chance: 30 },
-  { value: 1.1, chance: 20 },
-  { value: 1.2, chance: 15 },
-  { value: 1.5, chance: 8 },
-  { value: 3.0, chance: 2 },
-];
-
-// MEDIUM RISK - Balanced wins and losses
-const MEDIUM_RISK_MULTIPLIERS = [
-  { value: 0.3, chance: 50 },
-  { value: 0.5, chance: 40 },
-  { value: 0.7, chance: 15 },
-  { value: 1.0, chance: 25 },
-  { value: 1.3, chance: 20 },
-  { value: 1.8, chance: 12 },
-  { value: 2.5, chance: 8 },
-  { value: 4.0, chance: 1 },
-  { value: 6.0, chance: 0.2 },
-];
-
-// HIGH RISK - Big wins but high chance of loss
-const HIGH_RISK_MULTIPLIERS = [
-  { value: 0.1, chance: 40 },
-  { value: 0.2, chance: 60 },
-  { value: 0.3, chance: 15 },
-  { value: 0.5, chance: 20 },
-  { value: 1.0, chance: 20 },
-  { value: 2.0, chance: 10 },
-  { value: 5.0, chance: 8 },
-  { value: 10.0, chance: 1 },
-  { value: 20.0, chance: 0.5 },
-  { value: 50.0, chance: 0.1 },
-];
+// Risk level multipliers
+const LOW_RISK = [1.2, 1.1, 1.0, 0.9, 0.8, 0.9, 1.0, 1.1, 1.2];
+const MEDIUM_RISK = [2.0, 1.5, 1.0, 0.5, 0.2, 0.5, 1.0, 1.5, 2.0];
+const HIGH_RISK = [10.0, 5.0, 2.0, 1.0, 0.2, 1.0, 2.0, 5.0, 10.0];
 
 type HistoryItem = { multiplier: number; payout: number };
 type Ball = { id: number; body: Matter.Body; betAmount: number; betId: string };
@@ -73,9 +39,6 @@ export default function PlinkoPage() {
   const [activeBalls, setActiveBalls] = useState<Ball[]>([]);
   const [nextBallId, setNextBallId] = useState(1);
   const [multiBallCount, setMultiBallCount] = useState(1);
-  const [isDropping, setIsDropping] = useState(false);
-  const [recentMultipliers, setRecentMultipliers] = useState<number[]>([]);
-  const { gameState, socket } = useGame();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -90,156 +53,49 @@ export default function PlinkoPage() {
     setUser(parsedUser);
     setWallet(parsedUser.wallet || 0);
     setLoading(false);
-    fetchStats(token);
+    fetchWallet();
   }, [router]);
 
-  const fetchStats = async (token: string) => {
+  const fetchWallet = async () => {
     try {
-      const response = await axios.get("http://localhost:5000/api/bet/history?game=plinko", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.data.success) {
-        setStats({
-          totalWins: response.data.stats?.totalWins || 0,
-          totalLosses: response.data.stats?.totalLosses || 0
-        });
+      const res = await api.get("/wallet/balance");
+      if (res.data.success) {
+        setWallet(res.data.balance);
       }
     } catch (error) {
-      console.error("Failed to fetch stats:", error);
+      console.error("Failed to fetch wallet:", error);
     }
   };
 
-  const [stats, setStats] = useState({ totalWins: 0, totalLosses: 0 });
+  const getMultipliers = () => {
+    if (risk === "low") return LOW_RISK;
+    if (risk === "high") return HIGH_RISK;
+    return MEDIUM_RISK;
+  };
 
-  // Get random multiplier based on risk level
   const getRandomMultiplier = (): number => {
-    let multipliers;
-    switch (risk) {
-      case "low":
-        multipliers = LOW_RISK_MULTIPLIERS;
-        break;
-      case "high":
-        multipliers = HIGH_RISK_MULTIPLIERS;
-        break;
-      default:
-        multipliers = MEDIUM_RISK_MULTIPLIERS;
-    }
-    
-    const totalChance = multipliers.reduce((sum, m) => sum + m.chance, 0);
-    let random = Math.random() * totalChance;
-    
-    for (const multiplier of multipliers) {
-      if (random <= multiplier.chance) {
-        return multiplier.value;
-      }
-      random -= multiplier.chance;
-    }
-    return 1;
-  };
-
-  // Get display multipliers for UI
-  const getDisplayMultipliers = () => {
-    switch (risk) {
-      case "low":
-        return [ 2.0, 1.1,0.8, 0.9, 1.2, 1.5, 3.0];
-      case "high":
-        return [ 20.0, 2.0, 5.0, 0.1, 0.2, 0.5, 10.0, 20.0];
-      default:
-        return [ 1.0, 1.3, 0.3, 0.5, 0.7,1.8, 2.5, 4.0, 6.0];
+    const multipliers = getMultipliers();
+    // Weighted random based on risk level
+    const random = Math.random();
+    if (risk === "low") {
+      // Low risk: higher chance of 1x-1.2x
+      if (random < 0.4) return multipliers[4]; // center (1.0x)
+      if (random < 0.7) return multipliers[3] || multipliers[5];
+      return multipliers[Math.floor(Math.random() * multipliers.length)];
+    } else if (risk === "high") {
+      // High risk: higher chance of extreme values
+      if (random < 0.3) return multipliers[0] || multipliers[8]; // high multiplier
+      if (random < 0.5) return multipliers[4]; // center
+      return multipliers[Math.floor(Math.random() * multipliers.length)];
+    } else {
+      // Medium risk: balanced
+      return multipliers[Math.floor(Math.random() * multipliers.length)];
     }
   };
 
-  const getSlotFromX = (x: number): number => {
-    const slotWidth = WIDTH / 9;
-    let slot = Math.floor(x / slotWidth);
-    if (slot < 0) slot = 0;
-    if (slot > 8) slot = 8;
-    return slot;
-  };
-
-  const createBall = (x: number, betAmount: number, betId: string): Matter.Body => {
-    const { Bodies } = Matter;
-    return Bodies.circle(x, 50, 8, {
-      restitution: 0.65,
-      friction: 0.05,
-      density: 0.004,
-      label: `ball_${Date.now()}_${Math.random()}`,
-      render: {
-        fillStyle: `hsl(${Math.random() * 60 + 100}, 80%, 55%)`,
-        strokeStyle: "#ffffff",
-        lineWidth: 1.5
-      }
-    });
-  };
-
-  const dropSingleBall = async (amount: number, betId: string, ballIndex: number): Promise<number> => {
-    return new Promise(async (resolve) => {
-      if (!engineRef.current) {
-        resolve(0);
-        return;
-      }
-
-      const { Bodies, World, Events } = Matter;
-      
-      // Always drop from center with small spread for multiple balls
-      const dropX = WIDTH / 2;
-      const finalX = dropX + (ballIndex - (multiBallCount - 1) / 2) * 8;
-      const clampedX = Math.max(40, Math.min(WIDTH - 40, finalX));
-      
-      const ball = Bodies.circle(clampedX, 45, 7, {
-        restitution: 0.7 + Math.random() * 0.1,
-        friction: 0.03,
-        density: 0.003,
-        render: {
-          fillStyle: `hsl(${Math.random() * 60 + 100}, 80%, 55%)`,
-          strokeStyle: "#ffffff",
-          lineWidth: 1.5
-        }
-      });
-
-      const ballId = nextBallId + ballIndex;
-      
-      World.add(engineRef.current.world, ball);
-      setActiveBalls(prev => [...prev, { id: ballId, body: ball, betAmount: amount, betId: betId }]);
-
-      const checkPosition = () => {
-        if (ball.position.y > HEIGHT - 80) {
-          const slot = getSlotFromX(ball.position.x);
-          const multiplier = getRandomMultiplier();
-          const winAmount = Number((amount * multiplier).toFixed(2));
-          
-          // Highlight slot
-          const slotElement = document.getElementById(`slot-${slot}`);
-          if (slotElement) {
-            slotElement.classList.add('animate-pulse', winAmount > amount ? 'bg-green-500/30' : 'bg-red-500/30');
-            setTimeout(() => {
-              slotElement.classList.remove('animate-pulse', 'bg-green-500/30', 'bg-red-500/30');
-            }, 500);
-          }
-          
-          // Remove ball
-          World.remove(engineRef.current!.world, ball);
-          setActiveBalls(prev => prev.filter(b => b.id !== ballId));
-          Events.off(engineRef.current!, "afterUpdate", checkPosition);
-          
-          resolve(winAmount);
-        }
-      };
-
-      Events.on(engineRef.current, "afterUpdate", checkPosition);
-    });
-  };
-
-  const dropBalls = async () => {
-    if (running || isDropping) return;
+  const dropBall = async () => {
+    if (running) return;
     if (!engineRef.current) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("Please login first");
-      router.push("/login?redirect=/plinko");
-      return;
-    }
 
     const totalCost = betAmount * multiBallCount;
 
@@ -253,15 +109,17 @@ export default function PlinkoPage() {
       return;
     }
 
-    setIsDropping(true);
     setRunning(true);
     
     try {
-      const betResponse = await axios.post(
-        "http://localhost:5000/api/bet/place",
-        { game: "plinko", amount: totalCost, selection: "multi-drop", betType: "plinko", multiplier: 1 },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      // Place a single bet for all balls
+      const betResponse = await api.post("/bet/place", {
+        game: "plinko",
+        amount: totalCost,
+        selection: `${risk}-risk`,
+        betType: "plinko",
+        multiplier: 1
+      });
       
       setWallet(betResponse.data.wallet);
       const updatedUser = { ...user, wallet: betResponse.data.wallet };
@@ -269,57 +127,107 @@ export default function PlinkoPage() {
       setUser(updatedUser);
       
       const mainBetId = betResponse.data.betId;
+      const ballsToDrop: Ball[] = [];
+      const { Bodies, World, Events } = Matter;
       
-      const dropPromises = [];
+      // Create all balls
       for (let i = 0; i < multiBallCount; i++) {
-        dropPromises.push(dropSingleBall(betAmount, mainBetId, i));
-        await new Promise(resolve => setTimeout(resolve, 50));
+        const dropX = WIDTH / 2 + (i - (multiBallCount - 1) / 2) * 15;
+        const clampedX = Math.max(50, Math.min(WIDTH - 50, dropX));
+        
+        const ball = Bodies.circle(clampedX, 50, 8, {
+          restitution: 0.65,
+          friction: 0.05,
+          density: 0.004,
+          render: {
+            fillStyle: `hsl(${Math.random() * 60 + 100}, 70%, 55%)`,
+            strokeStyle: "#ffffff",
+            lineWidth: 1
+          }
+        });
+        
+        World.add(engineRef.current.world, ball);
+        ballsToDrop.push({
+          id: nextBallId + i,
+          body: ball,
+          betAmount: betAmount,
+          betId: mainBetId
+        });
       }
       
-      const results = await Promise.all(dropPromises);
-      const totalWin = results.reduce((sum, win) => sum + win, 0);
-      const newMultipliers = results.map(win => win / betAmount);
-      setRecentMultipliers(prev => [...newMultipliers, ...prev].slice(0, 20));
+      setNextBallId(prev => prev + multiBallCount);
+      setActiveBalls(prev => [...prev, ...ballsToDrop]);
       
-      if (totalWin > 0) {
-        const finalResponse = await axios.post(
-          "http://localhost:5000/api/bet/cashout",
-          { betId: mainBetId, winAmount: totalWin, result: `${totalWin}`, multiplier: totalWin / totalCost },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        
-        setWallet(finalResponse.data.wallet);
-        const finalUser = { ...user, wallet: finalResponse.data.wallet };
-        localStorage.setItem("user", JSON.stringify(finalUser));
-        setUser(finalUser);
-        
-        setLastWin(totalWin);
-        setTotalProfit(prev => prev + (totalWin - totalCost));
-        setBiggestWin(prev => totalWin > prev ? totalWin : prev);
-        setHistory(prev => [{ multiplier: totalWin / totalCost, payout: totalWin }, ...prev.slice(0, 14)]);
-        setGamesPlayed(prev => prev + 1);
-        setHistoryRefresh(prev => prev + 1);
-        fetchStats(token);
-        
-        if (totalWin > totalCost) {
-          alert(`🎉 WIN! Won ₹${totalWin.toLocaleString()} from ${multiBallCount} balls! 🎉`);
-        } else if (totalWin > 0) {
-          alert(`💰 Won ₹${totalWin.toLocaleString()} from ${multiBallCount} balls`);
-        } else {
-          alert(`😢 Lost ₹${totalCost.toLocaleString()}`);
+      let totalWin = 0;
+      let completedBalls = 0;
+      
+      const checkPositions = setInterval(async () => {
+        for (const ball of ballsToDrop) {
+          if (ball.body && ball.body.position.y > HEIGHT - 80) {
+            const slot = Math.floor(ball.body.position.x / (WIDTH / 9));
+            const clampedSlot = Math.max(0, Math.min(8, slot));
+            const multiplier = getMultipliers()[clampedSlot];
+            const winAmount = Number((ball.betAmount * multiplier).toFixed(2));
+            
+            totalWin += winAmount;
+            completedBalls++;
+            
+            // Visual feedback - highlight slot
+            const slotElement = document.getElementById(`slot-${clampedSlot}`);
+            if (slotElement) {
+              slotElement.classList.add('animate-pulse', winAmount > ball.betAmount ? 'bg-green-500/30' : 'bg-red-500/30');
+              setTimeout(() => {
+                slotElement.classList.remove('animate-pulse', 'bg-green-500/30', 'bg-red-500/30');
+              }, 500);
+            }
+            
+            // Remove ball
+            if (ball.body) {
+              World.remove(engineRef.current!.world, ball.body);
+              setActiveBalls(prev => prev.filter(b => b.id !== ball.id));
+            }
+          }
         }
-      } else {
-        setGamesPlayed(prev => prev + 1);
-        setHistoryRefresh(prev => prev + 1);
-        fetchStats(token);
-        alert(`😢 Total loss: ₹${totalCost.toLocaleString()}`);
-      }
+        
+        if (completedBalls === ballsToDrop.length && completedBalls > 0) {
+          clearInterval(checkPositions);
+          
+          // Update final win/loss
+          if (totalWin > 0) {
+            const cashoutResponse = await api.post("/bet/cashout", {
+              betId: mainBetId,
+              winAmount: totalWin,
+              result: `Won ₹${totalWin.toLocaleString()}`,
+              multiplier: totalWin / totalCost
+            });
+            
+            setWallet(cashoutResponse.data.wallet);
+            fetchWallet();
+            setLastWin(totalWin);
+            setTotalProfit(prev => prev + (totalWin - totalCost));
+            setBiggestWin(prev => totalWin > prev ? totalWin : prev);
+            setHistory(prev => [{ multiplier: totalWin / totalCost, payout: totalWin }, ...prev.slice(0, 14)]);
+            setGamesPlayed(prev => prev + 1);
+            setHistoryRefresh(prev => prev + 1);
+            
+            if (totalWin > totalCost) {
+              alert(`🎉 BIG WIN! You won ₹${totalWin.toLocaleString()} from ${multiBallCount} balls! 🎉`);
+            } else if (totalWin > 0) {
+              alert(`💰 You won ₹${totalWin.toLocaleString()} from ${multiBallCount} balls`);
+            }
+          } else {
+            setGamesPlayed(prev => prev + 1);
+            setHistoryRefresh(prev => prev + 1);
+            alert(`😢 No wins this time. Total loss: ₹${totalCost.toLocaleString()}`);
+          }
+          
+          setRunning(false);
+        }
+      }, 100);
       
     } catch (error: any) {
       console.error(error);
       alert(error.response?.data?.error || "Failed to drop balls");
-    } finally {
-      setIsDropping(false);
       setRunning(false);
     }
   };
@@ -332,9 +240,9 @@ export default function PlinkoPage() {
     
     const engine = Engine.create();
     engine.gravity.x = 0;
-    engine.gravity.y = 1.2;
-    engine.positionIterations = 20;
-    engine.velocityIterations = 20;
+    engine.gravity.y = 1;
+    engine.positionIterations = 15;
+    engine.velocityIterations = 15;
     engineRef.current = engine;
 
     const render = Render.create({
@@ -379,7 +287,7 @@ export default function PlinkoPage() {
     });
     walls.push(topWall);
     
-    // Create pegs
+    // Create pegs in triangular pattern
     const pegs: Matter.Body[] = [];
     const startY = 90;
     const rows = 12;
@@ -443,12 +351,7 @@ export default function PlinkoPage() {
     );
   }
 
-  const displayMultipliers = getDisplayMultipliers();
-  const riskColors = {
-    low: "bg-green-500",
-    medium: "bg-yellow-500",
-    high: "bg-red-500"
-  };
+  const multipliers = getMultipliers();
 
   return (
     <main className="min-h-screen bg-black text-white p-6">
@@ -457,120 +360,60 @@ export default function PlinkoPage() {
           <Link href="/" className="inline-flex items-center gap-2 text-zinc-400 hover:text-white">
             <ArrowLeft size={18} /> Back
           </Link>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="flex items-center gap-2 bg-zinc-800 px-4 py-2 rounded-xl hover:bg-zinc-700"
-            >
-              <History size={18} /> {showHistory ? "Hide History" : "Show History"}
-            </button>
-          </div>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-2 bg-zinc-800 px-4 py-2 rounded-xl"
+          >
+            <History size={18} /> History
+          </button>
         </div>
         
-        <h1 className="text-5xl font-black text-green-400 mb-6">PLINKO</h1>
+        <h1 className="text-5xl font-black text-green-400 mb-8">PLINKO</h1>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-            <div className="flex items-center gap-2">
-              <Wallet className="text-green-400" size={18} />
-              <p className="text-zinc-500 text-sm">Balance</p>
+        <div className="grid md:grid-cols-5 gap-4 mb-6">
+          <div className="bg-linear-to-r from-zinc-900 to-black rounded-2xl p-5">
+            <div className="flex items-center gap-3">
+              <Wallet className="text-green-400" />
+              <div>
+                <p className="text-zinc-500">Balance</p>
+                <h2 className="text-2xl font-black text-green-400">₹{wallet.toLocaleString()}</h2>
+              </div>
             </div>
-            <h2 className="text-xl font-black text-green-400">₹{wallet.toLocaleString()}</h2>
           </div>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-            <div className="flex items-center gap-2">
-              <Trophy className="text-yellow-400" size={18} />
-              <p className="text-zinc-500 text-sm">Last Win</p>
+          <div className="bg-linear-to-r from-yellow-900/20 to-black rounded-2xl p-5">
+            <div className="flex items-center gap-3">
+              <Trophy className="text-yellow-400" />
+              <div>
+                <p className="text-zinc-500">Last Win</p>
+                <h2 className="text-2xl font-black text-yellow-400">₹{lastWin.toLocaleString()}</h2>
+              </div>
             </div>
-            <h2 className="text-xl font-black text-yellow-400">₹{lastWin.toLocaleString()}</h2>
           </div>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="text-green-400" size={18} />
-              <p className="text-zinc-500 text-sm">Profit</p>
+          <div className="bg-linear-to-r from-green-900/20 to-black rounded-2xl p-5">
+            <div className="flex items-center gap-3">
+              <TrendingUp className="text-green-400" />
+              <div>
+                <p className="text-zinc-500">Profit</p>
+                <h2 className="text-2xl font-black text-green-400">₹{totalProfit.toLocaleString()}</h2>
+              </div>
             </div>
-            <h2 className="text-xl font-black text-green-400">₹{totalProfit.toLocaleString()}</h2>
           </div>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-            <p className="text-zinc-500 text-sm">Games</p>
-            <h2 className="text-xl font-black">{gamesPlayed}</h2>
+          <div className="bg-linear-to-r from-blue-900/20 to-black rounded-2xl p-5">
+            <p className="text-zinc-500">Games Played</p>
+            <h2 className="text-2xl font-black">{gamesPlayed}</h2>
           </div>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-            <p className="text-zinc-500 text-sm">Win Rate</p>
-            <h2 className="text-xl font-black">
-              <span className="text-green-400">{stats.totalWins}</span>
-              <span className="text-zinc-600">/</span>
-              <span className="text-red-400">{stats.totalLosses}</span>
-            </h2>
-          </div>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+          <div className="bg-linear-to-r from-purple-900/20 to-black rounded-2xl p-5">
             <div className="flex items-center gap-2">
-              <Layers className="text-blue-400" size={18} />
-              <p className="text-zinc-500 text-sm">Active</p>
+              <Layers className="text-purple-400" />
+              <div>
+                <p className="text-zinc-500">Active Balls</p>
+                <h2 className="text-2xl font-black text-purple-400">{activeBalls.length}</h2>
+              </div>
             </div>
-            <h2 className="text-xl font-black text-blue-400">{activeBalls.length}</h2>
           </div>
         </div>
 
-        {/* Risk Level Selector */}
-        <div className="bg-zinc-900/50 rounded-2xl p-4 mb-4">
-          <p className="text-zinc-400 text-sm mb-3">Select Risk Level</p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setRisk("low")}
-              className={`flex-1 py-3 rounded-xl font-bold transition-all ${
-                risk === "low" 
-                  ? "bg-green-500 text-black scale-105" 
-                  : "bg-green-500/20 text-green-400 hover:bg-green-500/30"
-              }`}
-            >
-              🟢 LOW RISK
-            </button>
-            <button
-              onClick={() => setRisk("medium")}
-              className={`flex-1 py-3 rounded-xl font-bold transition-all ${
-                risk === "medium" 
-                  ? "bg-yellow-500 text-black scale-105" 
-                  : "bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30"
-              }`}
-            >
-              🟡 MEDIUM RISK
-            </button>
-            <button
-              onClick={() => setRisk("high")}
-              className={`flex-1 py-3 rounded-xl font-bold transition-all ${
-                risk === "high" 
-                  ? "bg-red-500 text-white scale-105" 
-                  : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-              }`}
-            >
-              🔴 HIGH RISK
-            </button>
-          </div>
-        </div>
-
-        {/* Multiplier */}
-        <div className="bg-zinc-900/50 rounded-2xl p-3 mb-4">
-          <p className="text-zinc-500 text-xs text-center mb-2">
-            {risk === "low" && "🟢 Low Risk: Mostly 0.8x-2.0x (90% chance to win or break even)"}
-            {risk === "medium" && "🟡 Medium Risk: 0.3x-6.0x (Balanced wins and losses)"}
-            {risk === "high" && "🔴 High Risk: 0.1x-50.0x (Big wins but high chance of loss)"}
-          </p>
-          <div className="flex justify-center gap-2 flex-wrap">
-            {displayMultipliers.map((multi, i) => (
-              <span key={i} className={`text-xs font-bold px-2 py-1 rounded ${
-                multi >= 2 ? "bg-green-500/20 text-green-400" :
-                multi >= 1 ? "bg-yellow-500/20 text-yellow-400" : 
-                "bg-red-500/20 text-red-400"
-              }`}>
-                {multi}x
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid lg:grid-cols-[280px_1fr] gap-6">
+        <div className="grid lg:grid-cols-[300px_1fr] gap-6">
           {/* Left Panel - Controls */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-5">
             <div>
@@ -582,9 +425,8 @@ export default function PlinkoPage() {
                 onChange={(e) => setBetAmount(Number(e.target.value))} 
                 className="w-full bg-black border border-zinc-700 rounded-xl p-3 mb-3 focus:border-green-500 outline-none"
               />
-              
               <div className="grid grid-cols-4 gap-2">
-                {[10, 100, 500,1000].map((amount) => (
+                {[10, 50, 100, 500].map((amount) => (
                   <button key={amount} onClick={() => setBetAmount(amount)} className="bg-zinc-800 hover:bg-zinc-700 rounded-lg py-1.5 text-sm font-bold transition">
                     ₹{amount}
                   </button>
@@ -599,29 +441,59 @@ export default function PlinkoPage() {
                   onClick={() => setMultiBallCount(Math.max(1, multiBallCount - 1))}
                   className="bg-zinc-800 p-2 rounded-xl hover:bg-zinc-700"
                 >
-                  <Minus size={18} />
+                  <span className="text-lg font-bold">-</span>
                 </button>
                 <span className="text-2xl font-bold w-12 text-center">{multiBallCount}</span>
                 <button
-                  onClick={() => setMultiBallCount(Math.min(10, multiBallCount + 1))}
+                  onClick={() => setMultiBallCount(Math.min(5, multiBallCount + 1))}
                   className="bg-zinc-800 p-2 rounded-xl hover:bg-zinc-700"
                 >
-                  <Plus size={18} />
+                  <span className="text-lg font-bold">+</span>
                 </button>
               </div>
               <p className="text-zinc-500 text-xs mt-2">Total: ₹{(betAmount * multiBallCount).toLocaleString()}</p>
             </div>
+
+            <div>
+              <label className="block mb-1 text-zinc-400 text-sm">Risk Level</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => setRisk("low")}
+                  className={`py-2 rounded-xl font-bold text-sm transition ${
+                    risk === "low" ? "bg-green-500 text-black" : "bg-zinc-800 hover:bg-zinc-700"
+                  }`}
+                >
+                  🟢 LOW
+                </button>
+                <button
+                  onClick={() => setRisk("medium")}
+                  className={`py-2 rounded-xl font-bold text-sm transition ${
+                    risk === "medium" ? "bg-yellow-500 text-black" : "bg-zinc-800 hover:bg-zinc-700"
+                  }`}
+                >
+                  🟡 MEDIUM
+                </button>
+                <button
+                  onClick={() => setRisk("high")}
+                  className={`py-2 rounded-xl font-bold text-sm transition ${
+                    risk === "high" ? "bg-red-500 text-white" : "bg-zinc-800 hover:bg-zinc-700"
+                  }`}
+                >
+                  🔴 HIGH
+                </button>
+              </div>
+            </div>
             
             <button 
-              onClick={dropBalls} 
-              disabled={running || isDropping || betAmount > wallet || betAmount < 10} 
+              onClick={dropBall} 
+              disabled={running || betAmount > wallet || betAmount < 10} 
               className={`w-full py-4 rounded-xl font-black text-lg flex items-center justify-center gap-2 transition-all ${
-                running || isDropping || betAmount > wallet || betAmount < 10
+                running || betAmount > wallet || betAmount < 10
                   ? "bg-zinc-700 cursor-not-allowed" 
                   : "bg-linear-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-black"
               }`}
             >
-              {running || isDropping ? (
+              {running ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black"></div>
                   DROPPING...
@@ -632,43 +504,33 @@ export default function PlinkoPage() {
                 </>
               )}
             </button>
-
-            {/* Recent Multipliers */}
-            {recentMultipliers.length > 0 && (
-              <div className="bg-black rounded-xl p-3">
-                <p className="text-zinc-500 text-xs mb-2">Recent Results</p>
-                <div className="flex gap-1 flex-wrap">
-                  {recentMultipliers.slice(0, 10).map((multi, i) => (
-                    <span key={i} className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                      multi > 2 ? "bg-green-500/30 text-green-400" :
-                      multi >= 1 ? "bg-yellow-500/30 text-yellow-400" : 
-                      "bg-red-500/30 text-red-400"
-                    }`}>
-                      {multi}x
-                    </span>
-                  ))}
-                </div>
+            
+            <div className="bg-black rounded-xl p-3">
+              <p className="text-zinc-500 text-xs mb-2">Multiplier Range</p>
+              <div className="flex justify-between">
+                <span className="text-green-400">Min: {Math.min(...multipliers)}x</span>
+                <span className="text-yellow-400">Max: {Math.max(...multipliers)}x</span>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Right Panel - Game Board */}
           <div>
             <div 
               ref={sceneRef} 
-              className="border border-green-500/50 rounded-2xl overflow-hidden bg-black cursor-pointer"
+              className="border border-green-500/50 rounded-2xl overflow-hidden bg-black"
               style={{ width: WIDTH, height: HEIGHT }}
             />
             
             {/* Multiplier slots */}
             <div className="grid grid-cols-9 gap-0.5 mt-3">
-              {displayMultipliers.slice(0, 9).map((multi, index) => (
+              {multipliers.map((multi, index) => (
                 <div
                   key={index}
                   id={`slot-${index}`}
-                  className={`py-2 text-center font-black text-xs rounded-lg transition-all ${
-                    multi >= 2 ? "bg-green-500/20 text-green-400" :
-                    multi >= 1 ? "bg-yellow-500/20 text-yellow-400" : 
+                  className={`py-2 text-center font-black text-sm rounded-lg transition-all ${
+                    multi > 1.5 ? "bg-green-500/20 text-green-400" : 
+                    multi > 0.8 ? "bg-yellow-500/20 text-yellow-400" : 
                     "bg-red-500/20 text-red-400"
                   }`}
                 >
@@ -676,15 +538,33 @@ export default function PlinkoPage() {
                 </div>
               ))}
             </div>
+
+            {/* Active Balls Indicator */}
+            {activeBalls.length > 0 && (
+              <div className="mt-4 bg-zinc-900/50 rounded-xl p-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-xs font-bold">Balls dropping: {activeBalls.length}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Active Balls Indicator */}
-        {activeBalls.length > 0 && (
-          <div className="mt-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl p-2">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-xs font-bold">Dropping: {activeBalls.length} balls</span>
+        {/* Recent History */}
+        {history.length > 0 && (
+          <div className="mt-6 bg-zinc-900 rounded-2xl p-5">
+            <h3 className="font-bold mb-3">Recent Results</h3>
+            <div className="flex gap-2 flex-wrap">
+              {history.slice(0, 10).map((item, i) => (
+                <div key={i} className={`px-3 py-1 rounded-lg text-sm font-bold ${
+                  item.multiplier > 1.5 ? "bg-green-500/20 text-green-400" :
+                  item.multiplier > 0.8 ? "bg-yellow-500/20 text-yellow-400" :
+                  "bg-red-500/20 text-red-400"
+                }`}>
+                  {item.multiplier}x
+                </div>
+              ))}
             </div>
           </div>
         )}

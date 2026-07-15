@@ -125,7 +125,7 @@ export default function QuotexPage() {
 
   const fetchStats = async (token: string) => {
     try {
-      const response = await axios.get("http://localhost:5000/api/bet/history?game=quotex", {
+      const response = await axios.get("http://localhost:5002/api/bet/history?game=quotex", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data.success) {
@@ -405,7 +405,7 @@ export default function QuotexPage() {
       if (token && trade.betId) {
         try {
           await axios.post(
-            "http://localhost:5000/api/bet/cashout",
+            "http://localhost:5002/api/bet/cashout",
             { 
               betId: trade.betId, 
               winAmount: payout, 
@@ -491,7 +491,7 @@ export default function QuotexPage() {
 
     try {
       const response = await axios.post(
-        "http://localhost:5000/api/bet/place",
+        "http://localhost:5002/api/bet/place",
         {
           game: "quotex",
           amount: betAmount,

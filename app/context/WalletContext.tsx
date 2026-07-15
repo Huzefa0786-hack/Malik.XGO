@@ -20,7 +20,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!token) return;
     
     try {
-      const response = await axios.get("http://localhost:5000/api/wallet/balance", {
+      const response = await axios.get("http://localhost:5002/api/wallet/balance", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data.success) {
@@ -37,7 +37,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     
     try {
       const response = await axios.put(
-        "http://localhost:5000/api/wallet/update",
+        "http://localhost:5002/api/wallet/update",
         { amount, type },
         { headers: { Authorization: `Bearer ${token}` } }
       );

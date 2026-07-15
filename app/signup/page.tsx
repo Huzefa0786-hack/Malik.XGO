@@ -39,7 +39,7 @@ export default function SignupPage() {
       setLoading(true);
 
       const res = await axios.post(
-        "http://localhost:5000/api/auth/register",
+        "http://localhost:5002/api/auth/register",
         formData
       );
 userId:

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -96,12 +97,21 @@ export default function LoginPage() {
           >
             {loading ? "LOGGING IN..." : "LOGIN"}
           </button>
-
-          <div className="mt-4 text-center text-sm">
-            <p className="text-zinc-500">Admin Demo:</p>
-            <p className="text-green-400">WELLCOME / MALIK.XGO</p>
-          </div>
         </form>
+
+        {/* Register Button */}
+        <div className="mt-6 pt-6 border-t border-zinc-800">
+          <p className="text-center text-zinc-400 mb-4">
+            Don't have an account?
+          </p>
+          <Link
+            href="/register"
+            className="w-full block text-center bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl transition-colors"
+          >
+            CREATE NEW ACCOUNT
+          </Link>
+        </div>
+
       </div>
     </main>
   );

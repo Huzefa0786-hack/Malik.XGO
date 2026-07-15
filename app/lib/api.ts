@@ -1,29 +1,23 @@
 import axios from 'axios';
 
+// Change from 5000 to 5002
 const API_URL = 'http://localhost:5002/api';
 
 const api = axios.create({
   baseURL: API_URL,
   timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// Add token to every request
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    console.log(`📤 API: ${config.method?.toUpperCase()} ${config.url}`);
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  console.log(`📤 API: ${config.method?.toUpperCase()} ${config.url}`);
+  return config;
+});
 
-// Handle responses
 api.interceptors.response.use(
   (response) => {
     console.log(`📥 API: ${response.status} ${response.config.url}`);
@@ -35,8 +29,7 @@ api.interceptors.response.use(
       console.error('❌ Backend not running on port 5002');
     }
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      localStorage.clear();
       window.location.href = '/login';
     }
     return Promise.reject(error);

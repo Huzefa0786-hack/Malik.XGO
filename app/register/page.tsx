@@ -2,42 +2,64 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
+import Link from "next/link";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     
-    if (!email || !password) {
-      return alert("Please fill all fields");
+    if (!name || !email || !password) {
+      setError("Please fill all fields");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
     }
 
     try {
       setLoading(true);
       
-      const res = await axios.post("http://localhost:5000/api/auth/login", {
-        email,
-        password
+      const res = await fetch("http://localhost:5002/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password })
       });
       
-      console.log("Login response:", res.data);
+      const data = await res.json();
       
-      // Save to localStorage
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-      localStorage.setItem("loggedIn", "true");
+      console.log("Register response:", data);
       
-      alert("Login Successful!");
-      router.push("/");
+      if (data.success && data.token) {
+        // Save to localStorage
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.setItem("loggedIn", "true");
+        
+        alert("Registration successful!");
+        router.push("/");
+      } else {
+        setError(data.error || "Registration failed");
+      }
       
     } catch (err: any) {
-      console.error("Login error:", err);
-      alert(err.response?.data?.error || "Login Failed. Please check your credentials.");
+      console.error("Register error:", err);
+      setError("Network error. Make sure backend is running on port 5002");
     } finally {
       setLoading(false);
     }
@@ -46,26 +68,49 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-black flex items-center justify-center px-6">
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-        <h1 className="text-4xl font-black text-green-400 text-center mb-8">
-          Malik.XGO LOGIN
-        </h1>
+        <h1 className="text-4xl font-black text-green-400 text-center mb-2">CREATE ACCOUNT</h1>
+        <p className="text-zinc-500 text-center mb-8">Join Malik.XGO Gaming Platform</p>
 
-        <form onSubmit={handleLogin}>
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-xl text-red-400 text-center text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleRegister}>
+          <input
+            type="text"
+            placeholder="Full Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-white focus:border-green-500 outline-none mb-4"
+            required
+          />
+
           <input
             type="email"
-            placeholder="Email Address"
+            placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-white focus:border-green-500 outline-none transition-colors mb-4"
+            className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-white focus:border-green-500 outline-none mb-4"
             required
           />
 
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Password (min 6 characters)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-white focus:border-green-500 outline-none transition-colors mb-6"
+            className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-white focus:border-green-500 outline-none mb-4"
+            required
+          />
+
+          <input
+            type="password"
+            placeholder="Confirm Password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="w-full p-4 rounded-xl bg-black border border-zinc-700 text-white focus:border-green-500 outline-none mb-6"
             required
           />
 
@@ -74,21 +119,22 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full bg-green-500 hover:bg-green-600 disabled:bg-green-800 disabled:cursor-not-allowed text-black font-black py-4 rounded-xl transition-colors"
           >
-            {loading ? "LOGGING IN..." : "LOGIN"}
-          </button>
-
-          <p className="text-center text-gray-400 mt-4">
-            Don't have an account?
-          </p>
-
-          <button
-            type="button"
-            onClick={() => router.push("/register")}
-            className="w-full mt-2 bg-zinc-800 hover:bg-zinc-700 rounded-2xl py-4 font-bold text-white transition-colors"
-          >
-            REGISTER
+            {loading ? "CREATING ACCOUNT..." : "REGISTER"}
           </button>
         </form>
+
+        {/* Login Button */}
+        <div className="mt-6 pt-6 border-t border-zinc-800">
+          <p className="text-center text-zinc-400 mb-4">
+            Already have an account?
+          </p>
+          <Link
+            href="/login"
+            className="w-full block text-center bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl transition-colors"
+          >
+            LOGIN TO ACCOUNT
+          </Link>
+        </div>
       </div>
     </main>
   );
