@@ -7,6 +7,8 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import transactionRoutes from "./routes/transaction.js";
+import adminRoutes from "./routes/admin.js";
+import controlRoutes from "./routes/control.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -15,12 +17,12 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
-// ============ SINGLE DECLARATION (REMOVED DUPLICATES) ============
+// ============ SINGLE DECLARATIONS ============
 const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 5002;
 
-// ============ MIDDLEWARE ============
+// ============ SINGLE CORS CONFIGURATION ============
 app.use(cors({
   origin: [
     'http://localhost:3000',
@@ -254,6 +256,27 @@ mongoose.connect(MONGODB_URI)
     createDefaultAdmin();
     startServer();
   });
+
+// ============ SINGLE HEALTH CHECK ============
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date(),
+    port: PORT,
+    database: useMongoDB ? "MongoDB" : "In-Memory",
+    uptime: process.uptime()
+  });
+});
+
+// ============ SINGLE ROOT ROUTE ============
+app.get("/", (req, res) => {
+  res.json({
+    message: "Malik.XGO API Running",
+    version: "1.0.0",
+    port: PORT,
+    database: useMongoDB ? "MongoDB" : "In-Memory"
+  });
+});
 
 // ============ AUTH ROUTES ============
 app.post("/api/auth/register", async (req, res) => {
@@ -544,6 +567,13 @@ app.post("/api/bet/cashout", async (req, res) => {
 // ============ TRANSACTION ROUTES ============
 app.use("/api/transaction", transactionRoutes);
 
+// ============ ADMIN ROUTES ============
+app.use("/api/admin", adminRoutes);
+
+// ============ CONTROL ROUTES ============
+app.use("/api/control", controlRoutes);
+
+// ============ BET HISTORY ============
 app.get("/api/bet/history", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -565,6 +595,7 @@ app.get("/api/bet/history", async (req, res) => {
   }
 });
 
+// ============ WALLET BALANCE ============
 app.get("/api/wallet/balance", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -575,26 +606,6 @@ app.get("/api/wallet/balance", async (req, res) => {
   } catch (err) {
     res.status(401).json({ error: "Invalid token" });
   }
-});
-
-// ============ HEALTH CHECK ============
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    timestamp: new Date(),
-    port: PORT,
-    database: useMongoDB ? "MongoDB" : "In-Memory",
-    uptime: process.uptime()
-  });
-});
-
-app.get("/", (req, res) => {
-  res.json({
-    message: "Malik.XGO API Running",
-    version: "1.0.0",
-    port: PORT,
-    database: useMongoDB ? "MongoDB" : "In-Memory"
-  });
 });
 
 // ============ SOCKET.IO GAME TIMER ============
@@ -662,6 +673,8 @@ function startServer() {
     console.log(`   - Health: http://localhost:${PORT}/api/health`);
     console.log(`   - Auth: http://localhost:${PORT}/api/auth`);
     console.log(`   - Bet: http://localhost:${PORT}/api/bet`);
+    console.log(`   - Admin: http://localhost:${PORT}/api/admin`);
+    console.log(`   - Control: http://localhost:${PORT}/api/control`);
     console.log(`\n🔑 Default admin credentials:`);
     console.log(`   Email: admin@malikxgo.com`);
     console.log(`   Password: admin123\n`);

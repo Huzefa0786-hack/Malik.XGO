@@ -5,17 +5,20 @@ const BetSchema = new mongoose.Schema({
   userName: { type: String, required: true },
   userUid: { type: String, required: true },
   game: { type: String, required: true },
-  betType: { type: String }, // color, number, size, etc.
-  selection: { type: String }, // selected value
+  betType: { type: String },
+  selection: { type: String },
   amount: { type: Number, required: true },
   multiplier: { type: Number, default: 1 },
   result: { type: String },
   isWin: { type: Boolean, default: false },
   winAmount: { type: Number, default: 0 },
-  roundId: { type: String },
-  status: { type: String, enum: ["pending", "completed", "cancelled"], default: "pending" },
-  createdAt: { type: Date, default: Date.now },
-  roundId: { type: String, default: "" }
+  roundId: { type: String, default: "" },
+  status: { 
+    type: String, 
+    enum: ["pending", "completed", "cancelled"], 
+    default: "pending" 
+  },
+  createdAt: { type: Date, default: Date.now }
 });
 
 // Index for faster queries

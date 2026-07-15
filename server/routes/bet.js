@@ -19,7 +19,6 @@ const verifyToken = (req, res, next) => {
 
 // Place bet
 router.post("/place", verifyToken, async (req, res) => {
-  roundId: req.body.roundId || `round-${Date.now()}`
   try {
     const { game, amount, selection, betType, multiplier, roundId } = req.body;
     
@@ -56,7 +55,6 @@ router.post("/place", verifyToken, async (req, res) => {
       betId: bet._id,
       message: "Bet placed successfully"
     });
-    res.json({ success: true, wallet: user.wallet, betId: bet._id, roundId: bet.roundId });
   } catch (err) {
     console.error("Place bet error:", err);
     res.status(500).json({ error: err.message });
@@ -66,7 +64,7 @@ router.post("/place", verifyToken, async (req, res) => {
 // Cashout / Win
 router.post("/cashout", verifyToken, async (req, res) => {
   try {
-    const { game, winAmount, betId, result, multiplier } = req.body;
+    const { betId, winAmount, result, multiplier } = req.body;
     
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
@@ -94,7 +92,6 @@ router.post("/cashout", verifyToken, async (req, res) => {
       winAmount: winAmount,
       message: winAmount > 0 ? `You won ₹${winAmount}!` : "Better luck next time"
     });
-    
   } catch (err) {
     console.error("Cashout error:", err);
     res.status(500).json({ error: err.message });
@@ -144,7 +141,6 @@ router.get("/history", verifyToken, async (req, res) => {
         total
       }
     });
-    
   } catch (err) {
     console.error("History error:", err);
     res.status(500).json({ error: err.message });
