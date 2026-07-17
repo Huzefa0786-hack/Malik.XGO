@@ -118,6 +118,26 @@ export default function AviatorGame() {
   // ============================================
   // INITIALIZATION
   // ============================================
+  // Add this useEffect to each game page
+useEffect(() => {
+  const checkForcedResult = () => {
+    const gameName = "colorTrade"; // Change for each game
+    const forced = localStorage.getItem(`forced_${gameName}_result`);
+    const timestamp = localStorage.getItem("forced_result_timestamp");
+    
+    if (forced && timestamp && (Date.now() - parseInt(timestamp) < 5000)) {
+      // Apply forced result
+      setResult(forced);
+      // Handle the result based on game type
+      localStorage.removeItem(`forced_${gameName}_result`);
+    }
+  };
+  
+  checkForcedResult();
+  const interval = setInterval(checkForcedResult, 1000);
+  return () => clearInterval(interval);
+}, []);
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     const userData = localStorage.getItem("user");
@@ -1099,4 +1119,8 @@ const milestones = [1, 1.5, 2, 3, 5, 8, 10, 15, 20, 30, 40, 50];
       `}</style>
     </main>
   );
+}
+
+function setResult(forced: string) {
+  throw new Error("Function not implemented.");
 }

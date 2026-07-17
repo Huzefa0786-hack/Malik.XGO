@@ -8,9 +8,11 @@ import {
   Settings, RefreshCw, Search, Ban, Trash2, Plus, Minus,
   DollarSign, Gamepad2, BarChart3, Crown, Edit2,
   Play, Pause, StopCircle, Target, Circle,
-  Heart, Zap, Clock, LogOut, Shield,
+  Heart, Zap, Clock, LogOut, Shield, Send,
   TrendingUp as TrendUp, TrendingDown as TrendDown, CandlestickChart,
-  CreditCard, Banknote, Coins, CheckCircle, AlertCircle, Clock as ClockIcon
+  Dice6, Flame, Award, Star, AlertCircle, CheckCircle,
+  CreditCard, Banknote, Coins, Filter, Download, Calendar,
+  Eye, EyeOff, Copy, Check, Loader2, ArrowUpRight, ArrowDownRight
 } from "lucide-react";
 
 interface UserType {
@@ -49,64 +51,12 @@ interface TransactionType {
   createdAt: string;
 }
 
-// Default game settings
-const defaultGameSettings = {
-  colorTrade: {
-    enabled: true,
-    minBet: 10,
-    maxBet: 10000,
-    greenMultiplier: 2,
-    violetMultiplier: 4.5,
-    redMultiplier: 2,
-    numberMultiplier: 9,
-    bigMultiplier: 1.5,
-    smallMultiplier: 1.5
-  },
-  mines: {
-    enabled: true,
-    minBet: 10,
-    maxBet: 10000,
-    multipliers: [1.5, 2.0, 2.5, 3.2, 4.0, 5.0, 6.5, 8.0, 10.0, 12.5]
-  },
-  sky: {
-    enabled: true,
-    minBet: 10,
-    maxBet: 10000,
-    maxMultiplier: 20,
-    crashRate: 0.03
-  },
-  spin: {
-    enabled: true,
-    minBet: 10,
-    maxBet: 10000,
-    heartsMultiplier: 2,
-    spadesMultiplier: 3,
-    clubsMultiplier: 4,
-    diamondsMultiplier: 5
-  },
-  plinko: {
-    enabled: true,
-    minBet: 10,
-    maxBet: 10000,
-    lowRisk: [1.2, 1.1, 1.0, 0.9, 0.8, 0.9, 1.0, 1.1, 1.2],
-    mediumRisk: [2.0, 1.5, 1.0, 0.5, 0.2, 0.5, 1.0, 1.5, 2.0],
-    highRisk: [10.0, 5.0, 2.0, 1.0, 0.2, 1.0, 2.0, 5.0, 10.0]
-  },
-  lottery: {
-    enabled: true,
-    ticketPrice: 10,
-    jackpot: 100000,
-    minWin: 3,
-    maxWin: 10000
-  },
-  trading: {
-    enabled: true,
-    minBet: 10,
-    maxBet: 10000,
-    winProbability: 30,
-    lossProbability: 70
-  }
-};
+interface GameSettingsType {
+  enabled: boolean;
+  minBet: number;
+  maxBet: number;
+  [key: string]: any;
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -116,14 +66,98 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [walletAmount, setWalletAmount] = useState<{ [key: string]: string }>({});
-  const [message, setMessage] = useState<{ text: string; type: string } | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: string; timestamp?: number } | null>(null);
   const [selectedGame, setSelectedGame] = useState("colorTrade");
-  const [gameSettings, setGameSettings] = useState(defaultGameSettings);
+  const [gameStatus, setGameStatus] = useState("RUNNING");
+  const [forceResultValue, setForceResultValue] = useState("");
   const [transactionFilter, setTransactionFilter] = useState<"all" | "deposit" | "withdraw">("all");
   const [transactionStatus, setTransactionStatus] = useState<"all" | "pending" | "approved" | "rejected" | "completed">("all");
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionType | null>(null);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [adminNote, setAdminNote] = useState("");
+  const [transactionStats, setTransactionStats] = useState({
+    totalDeposits: 0,
+    totalWithdrawals: 0,
+    pendingDeposits: 0,
+    pendingWithdrawals: 0,
+    totalCompleted: 0,
+    totalRejected: 0
+  });
+
+  // Game Settings State
+  const [gameSettings, setGameSettings] = useState({
+    colorTrade: {
+      enabled: true,
+      minBet: 10,
+      maxBet: 10000,
+      greenMultiplier: 2,
+      violetMultiplier: 4.5,
+      redMultiplier: 2,
+      numberMultiplier: 9,
+      bigMultiplier: 1.5,
+      smallMultiplier: 1.5,
+      lastForcedResult: null,
+      forcedResult: null
+    },
+    mines: {
+      enabled: true,
+      minBet: 10,
+      maxBet: 10000,
+      maxMines: 10,
+      multipliers: [1.5, 2.0, 2.5, 3.2, 4.0, 5.0, 6.5, 8.0, 10.0, 12.5],
+      lastForcedResult: null,
+      forcedResult: null
+    },
+    sky: {
+      enabled: true,
+      minBet: 10,
+      maxBet: 10000,
+      maxMultiplier: 20,
+      crashRate: 0.03,
+      lastForcedResult: null,
+      forcedResult: null
+    },
+    spin: {
+      enabled: true,
+      minBet: 10,
+      maxBet: 10000,
+      heartsMultiplier: 2,
+      spadesMultiplier: 3,
+      clubsMultiplier: 4,
+      diamondsMultiplier: 5,
+      lastForcedResult: null,
+      forcedResult: null
+    },
+    plinko: {
+      enabled: true,
+      minBet: 10,
+      maxBet: 10000,
+      lastForcedResult: null,
+      forcedResult: null,
+      riskLevels: ["LOW", "MEDIUM", "HIGH"],
+      multipliers: {
+        LOW: [1.2, 1.1, 1.0, 0.9, 0.8, 0.9, 1.0, 1.1, 1.2],
+        MEDIUM: [2.0, 1.5, 1.0, 0.5, 0.2, 0.5, 1.0, 1.5, 2.0],
+        HIGH: [10.0, 5.0, 2.0, 1.0, 0.2, 1.0, 2.0, 5.0, 10.0]
+      }
+    },
+    lottery: {
+      enabled: true,
+      ticketPrice: 10,
+      jackpot: 100000,
+      lastForcedResult: null,
+      forcedResult: null
+    },
+    trading: {
+      enabled: true,
+      minBet: 10,
+      maxBet: 10000,
+      winProbability: 30,
+      lossProbability: 70,
+      lastForcedResult: null,
+      forcedResult: null
+    }
+  });
 
   const [platformSettings, setPlatformSettings] = useState({
     siteName: "Malik.XGO",
@@ -142,9 +176,7 @@ export default function AdminPage() {
     bannedUsers: 0,
     totalWallet: 0,
     totalDeposits: 125000,
-    totalWithdrawals: 72400,
-    pendingDeposits: 0,
-    pendingWithdrawals: 0
+    totalWithdrawals: 72400
   });
 
   useEffect(() => {
@@ -154,49 +186,34 @@ export default function AdminPage() {
       return;
     }
     loadData();
+    loadTransactions();
   }, [router]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [usersRes, transRes] = await Promise.all([
-        fetch("http://localhost:5002/api/auth/users"),
-        fetch("http://localhost:5002/api/transaction/admin/all", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`
-          }
-        })
-      ]);
-
-      const usersData = await usersRes.json();
-      const transData = await transRes.json();
-
-      setUsers(Array.isArray(usersData) ? usersData : []);
-      setTransactions(transData.success ? transData.transactions : []);
-
-      // Calculate stats
-      const pendingDeposits = transData.transactions?.filter((t: TransactionType) => t.type === "deposit" && t.status === "pending").length || 0;
-      const pendingWithdrawals = transData.transactions?.filter((t: TransactionType) => t.type === "withdraw" && t.status === "pending").length || 0;
-
+      const res = await fetch("http://localhost:5002/api/auth/users");
+      const data = await res.json();
+      setUsers(Array.isArray(data) ? data : []);
       setStats(prev => ({
         ...prev,
-        totalUsers: usersData.length || 0,
-        activeUsers: usersData.filter((u: UserType) => !u.isBanned).length || 0,
-        bannedUsers: usersData.filter((u: UserType) => u.isBanned).length || 0,
-        totalWallet: usersData.reduce((sum: number, u: UserType) => sum + (u.wallet || 0), 0),
-        pendingDeposits,
-        pendingWithdrawals
+        totalUsers: data.length || 0,
+        activeUsers: data.filter((u: UserType) => !u.isBanned).length || 0,
+        bannedUsers: data.filter((u: UserType) => u.isBanned).length || 0,
+        totalWallet: data.reduce((sum: number, u: UserType) => sum + (u.wallet || 0), 0)
       }));
       
       const saved = localStorage.getItem("admin_game_settings");
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          setGameSettings({ ...defaultGameSettings, ...parsed });
-        } catch (e) {
-          console.error("Failed to parse saved settings");
-        }
+          setGameSettings(prev => ({ ...prev, ...parsed }));
+        } catch (e) {}
       }
+      
+      const savedStatus = localStorage.getItem("game_status");
+      if (savedStatus) setGameStatus(savedStatus);
+      
     } catch (error) {
       console.error("Failed to load data:", error);
     } finally {
@@ -204,9 +221,154 @@ export default function AdminPage() {
     }
   };
 
+  const loadTransactions = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://localhost:5002/api/transaction/admin/all", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTransactions(data.transactions || []);
+        // Calculate stats
+        const deposits = data.transactions?.filter((t: TransactionType) => t.type === "deposit") || [];
+        const withdrawals = data.transactions?.filter((t: TransactionType) => t.type === "withdraw") || [];
+        setTransactionStats({
+          totalDeposits: deposits.reduce((sum, t) => sum + t.amount, 0),
+          totalWithdrawals: withdrawals.reduce((sum, t) => sum + t.amount, 0),
+          pendingDeposits: deposits.filter(t => t.status === "pending").length,
+          pendingWithdrawals: withdrawals.filter(t => t.status === "pending").length,
+          totalCompleted: data.transactions?.filter((t: TransactionType) => t.status === "completed").length || 0,
+          totalRejected: data.transactions?.filter((t: TransactionType) => t.status === "rejected").length || 0
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load transactions:", error);
+    }
+  };
+
   const showMessage = (text: string, type: "success" | "error") => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage(null), 3000);
+    setMessage({ text, type, timestamp: Date.now() });
+    setTimeout(() => setMessage(null), 4000);
+  };
+
+  // ============ TRANSACTION HANDLERS ============
+  const handleApproveTransaction = async (transactionId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:5002/api/transaction/admin/approve/${transactionId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ notes: adminNote })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showMessage("Transaction approved successfully!", "success");
+        loadTransactions();
+        loadData();
+        setShowTransactionModal(false);
+        setAdminNote("");
+      } else {
+        showMessage(data.error || "Failed to approve", "error");
+      }
+    } catch (error) {
+      showMessage("Failed to approve transaction", "error");
+    }
+  };
+
+  const handleRejectTransaction = async (transactionId: string) => {
+    if (!confirm("Are you sure you want to reject this transaction?")) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:5002/api/transaction/admin/reject/${transactionId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ notes: adminNote || "Rejected by admin" })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showMessage("Transaction rejected!", "success");
+        loadTransactions();
+        loadData();
+        setShowTransactionModal(false);
+        setAdminNote("");
+      } else {
+        showMessage(data.error || "Failed to reject", "error");
+      }
+    } catch (error) {
+      showMessage("Failed to reject transaction", "error");
+    }
+  };
+
+  const handleCompleteWithdrawal = async (transactionId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:5002/api/transaction/admin/complete-withdrawal/${transactionId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        showMessage("Withdrawal completed successfully!", "success");
+        loadTransactions();
+        loadData();
+        setShowTransactionModal(false);
+      } else {
+        showMessage(data.error || "Failed to complete", "error");
+      }
+    } catch (error) {
+      showMessage("Failed to complete withdrawal", "error");
+    }
+  };
+
+  const getMethodIcon = (method: string) => {
+    switch (method) {
+      case "upi": return <CreditCard size={16} className="text-blue-400" />;
+      case "bank": return <Banknote size={16} className="text-green-400" />;
+      case "crypto": return <Coins size={16} className="text-yellow-400" />;
+      default: return <Wallet size={16} className="text-zinc-400" />;
+    }
+  };
+
+  const getMethodLabel = (method: string) => {
+    switch (method) {
+      case "upi": return "UPI";
+      case "bank": return "Bank Transfer";
+      case "crypto": return "Crypto";
+      default: return "Wallet";
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed": return "text-green-400 bg-green-500/20 border-green-500/30";
+      case "approved": return "text-blue-400 bg-blue-500/20 border-blue-500/30";
+      case "pending": return "text-yellow-400 bg-yellow-500/20 border-yellow-500/30";
+      case "rejected": return "text-red-400 bg-red-500/20 border-red-500/30";
+      case "failed": return "text-red-400 bg-red-500/20 border-red-500/30";
+      default: return "text-zinc-400 bg-zinc-500/20 border-zinc-500/30";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "completed": return <CheckCircle size={16} className="text-green-400" />;
+      case "approved": return <CheckCircle size={16} className="text-blue-400" />;
+      case "pending": return <Clock size={16} className="text-yellow-400" />;
+      case "rejected": return <AlertCircle size={16} className="text-red-400" />;
+      default: return <Clock size={16} className="text-zinc-400" />;
+    }
   };
 
   const updateUserWallet = async (userId: string, amount: number, type: "add" | "remove") => {
@@ -276,10 +438,30 @@ export default function AdminPage() {
     showMessage(`${setting} updated`, "success");
   };
 
+  const updateGameStatus = (status: string) => {
+    setGameStatus(status);
+    localStorage.setItem("game_status", status);
+    showMessage(`Game status changed to ${status}`, "success");
+  };
+
   const forceGameResult = (game: string, result: string) => {
-    localStorage.setItem(`forced_${game}_result`, result);
-    localStorage.setItem(`forced_result_timestamp`, Date.now().toString());
-    showMessage(`${game} result forced to ${result}`, "success");
+    const forceData = {
+      result: result,
+      timestamp: Date.now(),
+      game: game
+    };
+    localStorage.setItem(`forced_${game}_result`, JSON.stringify(forceData));
+    updateGameSetting(game, "forcedResult", result);
+    updateGameSetting(game, "lastForcedResult", {
+      result: result,
+      timestamp: new Date().toLocaleTimeString()
+    });
+    const socket = (window as any).socket;
+    if (socket) {
+      socket.emit('force_result', { game, result });
+    }
+    showMessage(`✅ ${game} result forced to ${result}`, "success");
+    setForceResultValue("");
   };
 
   const handleLogout = () => {
@@ -287,139 +469,17 @@ export default function AdminPage() {
     router.push("/admin-login");
   };
 
-  const handleEdit = (game: string, setting: string, currentValue: number) => {
-    const val = prompt(`Enter new value for ${setting}:`, currentValue.toString());
-    if (val && !isNaN(Number(val))) {
-      updateGameSetting(game, setting, Number(val));
-    }
-  };
-
-  // ============ TRANSACTION HANDLERS ============
-  const handleApproveTransaction = async (transactionId: string) => {
-    try {
-      const response = await fetch(`http://localhost:5002/api/transaction/admin/approve/${transactionId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`
-        },
-        body: JSON.stringify({ notes: adminNote })
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        showMessage("Transaction approved successfully!", "success");
-        loadData();
-        setShowTransactionModal(false);
-        setAdminNote("");
-      } else {
-        showMessage(data.error || "Failed to approve transaction", "error");
-      }
-    } catch (error) {
-      showMessage("Failed to approve transaction", "error");
-    }
-  };
-
-  const handleRejectTransaction = async (transactionId: string) => {
-    if (!confirm("Are you sure you want to reject this transaction?")) return;
-
-    try {
-      const response = await fetch(`http://localhost:5002/api/transaction/admin/reject/${transactionId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`
-        },
-        body: JSON.stringify({ notes: adminNote || "Transaction rejected by admin" })
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        showMessage("Transaction rejected!", "success");
-        loadData();
-        setShowTransactionModal(false);
-        setAdminNote("");
-      } else {
-        showMessage(data.error || "Failed to reject transaction", "error");
-      }
-    } catch (error) {
-      showMessage("Failed to reject transaction", "error");
-    }
-  };
-
-  const handleCompleteWithdrawal = async (transactionId: string) => {
-    try {
-      const response = await fetch(`http://localhost:5002/api/transaction/admin/complete-withdrawal/${transactionId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        showMessage("Withdrawal completed successfully!", "success");
-        loadData();
-        setShowTransactionModal(false);
-      } else {
-        showMessage(data.error || "Failed to complete withdrawal", "error");
-      }
-    } catch (error) {
-      showMessage("Failed to complete withdrawal", "error");
-    }
-  };
-
-  const getMethodIcon = (method: string) => {
-    switch (method) {
-      case "upi": return <CreditCard size={16} className="text-blue-400" />;
-      case "bank": return <Banknote size={16} className="text-green-400" />;
-      case "crypto": return <Coins size={16} className="text-yellow-400" />;
-      default: return <Wallet size={16} className="text-zinc-400" />;
-    }
-  };
-
-  const getMethodLabel = (method: string) => {
-    switch (method) {
-      case "upi": return "UPI";
-      case "bank": return "Bank Transfer";
-      case "crypto": return "Crypto";
-      default: return "Wallet";
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed": return "text-green-400 bg-green-500/20 border-green-500/30";
-      case "approved": return "text-blue-400 bg-blue-500/20 border-blue-500/30";
-      case "pending": return "text-yellow-400 bg-yellow-500/20 border-yellow-500/30";
-      case "rejected": return "text-red-400 bg-red-500/20 border-red-500/30";
-      case "failed": return "text-red-400 bg-red-500/20 border-red-500/30";
-      default: return "text-zinc-400 bg-zinc-500/20 border-zinc-500/30";
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed": return <CheckCircle size={16} className="text-green-400" />;
-      case "approved": return <CheckCircle size={16} className="text-blue-400" />;
-      case "pending": return <ClockIcon size={16} className="text-yellow-400" />;
-      case "rejected": return <AlertCircle size={16} className="text-red-400" />;
-      default: return <ClockIcon size={16} className="text-zinc-400" />;
-    }
-  };
+  const filteredUsers = users.filter(user =>
+    user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.uid?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const filteredTransactions = transactions.filter(t => {
     if (transactionFilter !== "all" && t.type !== transactionFilter) return false;
     if (transactionStatus !== "all" && t.status !== transactionStatus) return false;
     return true;
   });
-
-  const filteredUsers = users.filter(user =>
-    user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.uid?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const gamesList = [
     { id: "colorTrade", name: "Color Trade", icon: "🎨", color: "bg-pink-600" },
@@ -439,22 +499,24 @@ export default function AdminPage() {
     );
   }
 
-  const colorTrade = gameSettings.colorTrade;
-  const mines = gameSettings.mines;
-  const sky = gameSettings.sky;
-  const spin = gameSettings.spin;
-  const trading = gameSettings.trading;
+  const currentGame = gameSettings[selectedGame as keyof typeof gameSettings] as GameSettingsType;
 
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-zinc-950 border-b border-zinc-800">
+      <div className="sticky top-0 z-50 bg-linear-to-r from-zinc-950 to-black border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <Crown className="text-green-400" size={28} />
             <h1 className="text-2xl font-black text-green-400">Admin Panel</h1>
           </div>
           <div className="flex items-center gap-3">
+            <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+              gameStatus === "RUNNING" ? "bg-green-500/20 text-green-400" :
+              gameStatus === "PAUSED" ? "bg-yellow-500/20 text-yellow-400" : "bg-red-500/20 text-red-400"
+            }`}>
+              {gameStatus === "RUNNING" ? "🟢 LIVE" : gameStatus === "PAUSED" ? "🟡 PAUSED" : "🔴 STOPPED"}
+            </div>
             <button onClick={loadData} className="p-2 bg-zinc-800 rounded-xl hover:bg-zinc-700">
               <RefreshCw size={18} />
             </button>
@@ -466,14 +528,15 @@ export default function AdminPage() {
       </div>
 
       {message && (
-        <div className={`fixed top-20 right-4 z-50 px-4 py-2 rounded-xl text-sm ${
+        <div className={`fixed top-20 right-4 z-50 px-4 py-2 rounded-xl text-sm flex items-center gap-2 ${
           message.type === "success" ? "bg-green-500/20 text-green-400 border border-green-500" : "bg-red-500/20 text-red-400 border border-red-500"
         }`}>
+          {message.type === "success" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
           {message.text}
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Tabs - Added "Transactions" tab */}
       <div className="border-b border-zinc-800 bg-zinc-950/50 px-4 overflow-x-auto">
         <div className="max-w-7xl mx-auto flex gap-1 py-2">
           {[
@@ -518,13 +581,38 @@ export default function AdminPage() {
               </div>
               <div className="bg-linear-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-zinc-800">
                 <TrendingUp className="text-green-400 mb-3" size={32} />
-                <p className="text-zinc-500 text-sm">Pending Deposits</p>
-                <p className="text-3xl font-bold text-green-400">{stats.pendingDeposits}</p>
+                <p className="text-zinc-500 text-sm">Total Deposits</p>
+                <p className="text-3xl font-bold text-green-400">₹{stats.totalDeposits.toLocaleString()}</p>
               </div>
               <div className="bg-linear-to-br from-zinc-900 to-zinc-950 rounded-2xl p-6 border border-zinc-800">
                 <TrendingDown className="text-red-400 mb-3" size={32} />
-                <p className="text-zinc-500 text-sm">Pending Withdrawals</p>
-                <p className="text-3xl font-bold text-red-400">{stats.pendingWithdrawals}</p>
+                <p className="text-zinc-500 text-sm">Total Withdrawals</p>
+                <p className="text-3xl font-bold text-red-400">₹{stats.totalWithdrawals.toLocaleString()}</p>
+              </div>
+            </div>
+            
+            {/* Transaction Stats */}
+            <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Wallet className="text-green-400" /> Transaction Summary
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-black rounded-xl p-4 text-center">
+                  <p className="text-zinc-500 text-sm">Total Deposits</p>
+                  <p className="text-2xl font-bold text-green-400">₹{transactionStats.totalDeposits.toLocaleString()}</p>
+                </div>
+                <div className="bg-black rounded-xl p-4 text-center">
+                  <p className="text-zinc-500 text-sm">Total Withdrawals</p>
+                  <p className="text-2xl font-bold text-red-400">₹{transactionStats.totalWithdrawals.toLocaleString()}</p>
+                </div>
+                <div className="bg-black rounded-xl p-4 text-center">
+                  <p className="text-zinc-500 text-sm">Pending</p>
+                  <p className="text-2xl font-bold text-yellow-400">{transactionStats.pendingDeposits + transactionStats.pendingWithdrawals}</p>
+                </div>
+                <div className="bg-black rounded-xl p-4 text-center">
+                  <p className="text-zinc-500 text-sm">Completed</p>
+                  <p className="text-2xl font-bold text-green-400">{transactionStats.totalCompleted}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -613,12 +701,12 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Transactions Tab */}
+        {/* ============ TRANSACTIONS TAB ============ */}
         {activeTab === "transactions" && (
           <div>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-              <h2 className="text-3xl font-black">Transaction Management</h2>
-              <div className="flex gap-3">
+              <h2 className="text-3xl font-black">Transactions Management</h2>
+              <div className="flex flex-wrap gap-3">
                 <select
                   value={transactionFilter}
                   onChange={(e) => setTransactionFilter(e.target.value as any)}
@@ -639,6 +727,12 @@ export default function AdminPage() {
                   <option value="completed">Completed</option>
                   <option value="rejected">Rejected</option>
                 </select>
+                <button
+                  onClick={loadTransactions}
+                  className="bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2"
+                >
+                  <RefreshCw size={14} /> Refresh
+                </button>
               </div>
             </div>
 
@@ -743,6 +837,19 @@ export default function AdminPage() {
           <div>
             <h2 className="text-3xl font-black mb-6">Game Control</h2>
             
+            {/* Game Status Controls */}
+            <div className="flex gap-3 mb-6 flex-wrap">
+              <button onClick={() => updateGameStatus("RUNNING")} className="bg-green-600 hover:bg-green-700 px-6 py-2 rounded-xl font-bold text-sm flex items-center gap-2">
+                <Play size={14} /> Start All Games
+              </button>
+              <button onClick={() => updateGameStatus("PAUSED")} className="bg-yellow-600 hover:bg-yellow-700 px-6 py-2 rounded-xl font-bold text-sm flex items-center gap-2">
+                <Pause size={14} /> Pause All Games
+              </button>
+              <button onClick={() => updateGameStatus("STOPPED")} className="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-xl font-bold text-sm flex items-center gap-2">
+                <StopCircle size={14} /> Stop All Games
+              </button>
+            </div>
+
             {/* Game Selector */}
             <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
               {gamesList.map(game => (
@@ -760,109 +867,571 @@ export default function AdminPage() {
             </div>
 
             {/* Color Trade Control */}
-            {selectedGame === "colorTrade" && colorTrade && (
-              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
-                <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+            {selectedGame === "colorTrade" && (
+              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 space-y-6">
+                <h3 className="text-2xl font-bold flex items-center gap-2">
                   <Circle className="text-pink-400" /> Color Trade Control
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <label className="text-zinc-500 text-sm">Min Bet (₹)</label>
+                    <label className="text-zinc-500 text-sm">Min Bet</label>
                     <div className="flex justify-between items-center mt-1">
-                      <span className="text-xl font-bold">₹{colorTrade.minBet}</span>
-                      <button onClick={() => handleEdit("colorTrade", "minBet", colorTrade.minBet)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                      <span className="text-xl font-bold">₹{currentGame.minBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter min bet:", currentGame.minBet.toString());
+                        if (val) updateGameSetting("colorTrade", "minBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
                     </div>
                   </div>
                   <div>
-                    <label className="text-zinc-500 text-sm">Max Bet (₹)</label>
+                    <label className="text-zinc-500 text-sm">Max Bet</label>
                     <div className="flex justify-between items-center mt-1">
-                      <span className="text-xl font-bold">₹{colorTrade.maxBet}</span>
-                      <button onClick={() => handleEdit("colorTrade", "maxBet", colorTrade.maxBet)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                      <span className="text-xl font-bold">₹{currentGame.maxBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter max bet:", currentGame.maxBet.toString());
+                        if (val) updateGameSetting("colorTrade", "maxBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
                     </div>
                   </div>
                   <div>
                     <label className="text-zinc-500 text-sm">Game Status</label>
-                    <div className="mt-1">
-                      <button onClick={() => updateGameSetting("colorTrade", "enabled", !colorTrade.enabled)} 
-                        className={`px-4 py-2 rounded-xl text-sm font-bold ${colorTrade.enabled ? "bg-green-500 text-black" : "bg-red-500 text-white"}`}>
-                        {colorTrade.enabled ? "Enabled" : "Disabled"}
-                      </button>
+                    <button onClick={() => updateGameSetting("colorTrade", "enabled", !currentGame.enabled)} 
+                      className={`px-4 py-2 rounded-xl text-sm font-bold ${currentGame.enabled ? "bg-green-500 text-black" : "bg-red-500 text-white"}`}>
+                      {currentGame.enabled ? "Enabled" : "Disabled"}
+                    </button>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Last Forced Result</label>
+                    <div className="mt-1 p-2 bg-black rounded-lg text-center">
+                      <span className="text-yellow-400">
+                        {currentGame.lastForcedResult?.result || "None"}
+                      </span>
+                      {currentGame.lastForcedResult?.timestamp && (
+                        <span className="text-xs text-zinc-500 block">
+                          {currentGame.lastForcedResult.timestamp}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                <h4 className="font-bold mb-3 text-lg">Color Multipliers</h4>
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                  <div className="bg-green-500/20 rounded-xl p-4 text-center">
-                    <p className="text-green-400 font-bold">🟢 GREEN</p>
-                    <div className="flex justify-center items-center gap-2 mt-2">
-                      <span className="text-2xl font-bold">{colorTrade.greenMultiplier}x</span>
-                      <button onClick={() => handleEdit("colorTrade", "greenMultiplier", colorTrade.greenMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
-                    </div>
-                  </div>
-                  <div className="bg-purple-500/20 rounded-xl p-4 text-center">
-                    <p className="text-purple-400 font-bold">🟣 VIOLET</p>
-                    <div className="flex justify-center items-center gap-2 mt-2">
-                      <span className="text-2xl font-bold">{colorTrade.violetMultiplier}x</span>
-                      <button onClick={() => handleEdit("colorTrade", "violetMultiplier", colorTrade.violetMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
-                    </div>
-                  </div>
-                  <div className="bg-red-500/20 rounded-xl p-4 text-center">
-                    <p className="text-red-400 font-bold">🔴 RED</p>
-                    <div className="flex justify-center items-center gap-2 mt-2">
-                      <span className="text-2xl font-bold">{colorTrade.redMultiplier}x</span>
-                      <button onClick={() => handleEdit("colorTrade", "redMultiplier", colorTrade.redMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-black rounded-xl p-4 text-center">
-                    <p className="text-yellow-400 font-bold">🔢 NUMBERS (0-9)</p>
-                    <div className="flex justify-center items-center gap-2 mt-2">
-                      <span className="text-2xl font-bold">{colorTrade.numberMultiplier}x</span>
-                      <button onClick={() => handleEdit("colorTrade", "numberMultiplier", colorTrade.numberMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
-                    </div>
-                  </div>
-                  <div className="bg-black rounded-xl p-4 text-center">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <p className="text-blue-400 font-bold">📊 BIG (5-9)</p>
-                        <div className="flex justify-center items-center gap-2 mt-2">
-                          <span className="text-2xl font-bold">{colorTrade.bigMultiplier}x</span>
-                          <button onClick={() => handleEdit("colorTrade", "bigMultiplier", colorTrade.bigMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
-                        </div>
+                <div>
+                  <h4 className="font-bold mb-3">Color Multipliers</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-green-500/20 rounded-xl p-4 text-center">
+                      <p className="text-green-400 font-bold">🟢 GREEN</p>
+                      <div className="flex justify-center items-center gap-2 mt-2">
+                        <span className="text-2xl font-bold">{currentGame.greenMultiplier}x</span>
+                        <button onClick={() => {
+                          const val = prompt("Enter GREEN multiplier:", currentGame.greenMultiplier.toString());
+                          if (val) updateGameSetting("colorTrade", "greenMultiplier", Number(val));
+                        }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
                       </div>
-                      <div>
-                        <p className="text-cyan-400 font-bold">📉 SMALL (0-4)</p>
-                        <div className="flex justify-center items-center gap-2 mt-2">
-                          <span className="text-2xl font-bold">{colorTrade.smallMultiplier}x</span>
-                          <button onClick={() => handleEdit("colorTrade", "smallMultiplier", colorTrade.smallMultiplier)} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
-                        </div>
+                    </div>
+                    <div className="bg-purple-500/20 rounded-xl p-4 text-center">
+                      <p className="text-purple-400 font-bold">🟣 VIOLET</p>
+                      <div className="flex justify-center items-center gap-2 mt-2">
+                        <span className="text-2xl font-bold">{currentGame.violetMultiplier}x</span>
+                        <button onClick={() => {
+                          const val = prompt("Enter VIOLET multiplier:", currentGame.violetMultiplier.toString());
+                          if (val) updateGameSetting("colorTrade", "violetMultiplier", Number(val));
+                        }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                      </div>
+                    </div>
+                    <div className="bg-red-500/20 rounded-xl p-4 text-center">
+                      <p className="text-red-400 font-bold">🔴 RED</p>
+                      <div className="flex justify-center items-center gap-2 mt-2">
+                        <span className="text-2xl font-bold">{currentGame.redMultiplier}x</span>
+                        <button onClick={() => {
+                          const val = prompt("Enter RED multiplier:", currentGame.redMultiplier.toString());
+                          if (val) updateGameSetting("colorTrade", "redMultiplier", Number(val));
+                        }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-black rounded-xl p-4">
-                  <h4 className="font-bold mb-3">Force Result</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => forceGameResult("colorTrade", "GREEN")} className="bg-green-600 hover:bg-green-500 py-2 rounded-lg font-bold transition">🎲 FORCE GREEN</button>
-                    <button onClick={() => forceGameResult("colorTrade", "VIOLET")} className="bg-purple-600 hover:bg-purple-500 py-2 rounded-lg font-bold transition">🎲 FORCE VIOLET</button>
-                    <button onClick={() => forceGameResult("colorTrade", "RED")} className="bg-red-600 hover:bg-red-500 py-2 rounded-lg font-bold transition">🎲 FORCE RED</button>
-                    <button onClick={() => forceGameResult("colorTrade", "BIG")} className="bg-blue-600 hover:bg-blue-500 py-2 rounded-lg font-bold transition">🎲 FORCE BIG</button>
-                    <button onClick={() => forceGameResult("colorTrade", "SMALL")} className="bg-cyan-600 hover:bg-cyan-500 py-2 rounded-lg font-bold transition">🎲 FORCE SMALL</button>
+                <div>
+                  <h4 className="font-bold mb-3">Number & Size Multipliers</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-black rounded-xl p-4 text-center">
+                      <p className="text-yellow-400 font-bold">🔢 Numbers (0-9)</p>
+                      <div className="flex justify-center items-center gap-2 mt-2">
+                        <span className="text-2xl font-bold">{currentGame.numberMultiplier}x</span>
+                        <button onClick={() => {
+                          const val = prompt("Enter number multiplier:", currentGame.numberMultiplier.toString());
+                          if (val) updateGameSetting("colorTrade", "numberMultiplier", Number(val));
+                        }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                      </div>
+                    </div>
+                    <div className="bg-black rounded-xl p-4 text-center">
+                      <p className="text-blue-400 font-bold">📊 BIG (5-9)</p>
+                      <div className="flex justify-center items-center gap-2 mt-2">
+                        <span className="text-2xl font-bold">{currentGame.bigMultiplier}x</span>
+                        <button onClick={() => {
+                          const val = prompt("Enter BIG multiplier:", currentGame.bigMultiplier.toString());
+                          if (val) updateGameSetting("colorTrade", "bigMultiplier", Number(val));
+                        }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                      </div>
+                    </div>
+                    <div className="bg-black rounded-xl p-4 text-center">
+                      <p className="text-cyan-400 font-bold">📉 SMALL (0-4)</p>
+                      <div className="flex justify-center items-center gap-2 mt-2">
+                        <span className="text-2xl font-bold">{currentGame.smallMultiplier}x</span>
+                        <button onClick={() => {
+                          const val = prompt("Enter SMALL multiplier:", currentGame.smallMultiplier.toString());
+                          if (val) updateGameSetting("colorTrade", "smallMultiplier", Number(val));
+                        }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* FORCE RESULT SECTION */}
+                <div className="bg-linear-to-r from-purple-900/20 to-pink-900/20 rounded-xl p-6 border border-purple-500/30">
+                  <h4 className="font-bold mb-4 flex items-center gap-2 text-lg">
+                    <Target className="text-purple-400" /> Force Result
+                  </h4>
+                  
+                  <div className="grid grid-cols-4 gap-2 mb-4">
+                    <button onClick={() => forceGameResult("colorTrade", "GREEN")} className="bg-green-600 hover:bg-green-500 py-2 rounded-lg font-bold transition">FORCE GREEN</button>
+                    <button onClick={() => forceGameResult("colorTrade", "VIOLET")} className="bg-purple-600 hover:bg-purple-500 py-2 rounded-lg font-bold transition">FORCE VIOLET</button>
+                    <button onClick={() => forceGameResult("colorTrade", "RED")} className="bg-red-600 hover:bg-red-500 py-2 rounded-lg font-bold transition">FORCE RED</button>
+                    <button onClick={() => forceGameResult("colorTrade", "BIG")} className="bg-blue-600 hover:bg-blue-500 py-2 rounded-lg font-bold transition">FORCE BIG</button>
+                    <button onClick={() => forceGameResult("colorTrade", "SMALL")} className="bg-cyan-600 hover:bg-cyan-500 py-2 rounded-lg font-bold transition">FORCE SMALL</button>
                     <div className="grid grid-cols-5 gap-1 col-span-2">
                       {[0,1,2,3,4,5,6,7,8,9].map(n => (
                         <button key={n} onClick={() => forceGameResult("colorTrade", n.toString())} className="bg-zinc-700 hover:bg-green-600 py-1 rounded-lg text-sm font-bold transition">{n}</button>
                       ))}
                     </div>
                   </div>
+                  
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Custom result (e.g., 7 or BIG)"
+                      value={forceResultValue}
+                      onChange={(e) => setForceResultValue(e.target.value)}
+                      className="flex-1 bg-black border border-zinc-700 rounded-lg px-4 py-2 text-sm focus:border-purple-500 outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        if (forceResultValue) {
+                          forceGameResult("colorTrade", forceResultValue.toUpperCase());
+                        }
+                      }}
+                      className="bg-purple-600 hover:bg-purple-500 px-6 py-2 rounded-lg font-bold text-sm transition flex items-center gap-2"
+                    >
+                      <Send size={14} /> Force
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Other game controls remain the same... */}
+            {/* Mines Control */}
+            {selectedGame === "mines" && (
+              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 space-y-6">
+                <h3 className="text-2xl font-bold flex items-center gap-2">
+                  <Target className="text-orange-400" /> Mines Control
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="text-zinc-500 text-sm">Min Bet</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">₹{currentGame.minBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter min bet:", currentGame.minBet.toString());
+                        if (val) updateGameSetting("mines", "minBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Max Bet</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">₹{currentGame.maxBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter max bet:", currentGame.maxBet.toString());
+                        if (val) updateGameSetting("mines", "maxBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Max Mines</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">{currentGame.maxMines}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter max mines:", currentGame.maxMines.toString());
+                        if (val) updateGameSetting("mines", "maxMines", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Last Forced Result</label>
+                    <div className="mt-1 p-2 bg-black rounded-lg text-center">
+                      <span className="text-yellow-400">
+                        {currentGame.lastForcedResult?.result || "None"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-bold mb-3">Multiplier Table</h4>
+                  <div className="grid grid-cols-5 gap-2">
+                    {currentGame.multipliers.map((multi: number, i: number) => (
+                      <div key={i} className="bg-black rounded-xl p-3 text-center">
+                        <p className="text-sm text-zinc-400">{i+1} Mine{i !== 0 ? "s" : ""}</p>
+                        <p className="text-xl font-bold text-green-400">{multi}x</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* FORCE MINES RESULT */}
+                <div className="bg-linear-to-r from-orange-900/20 to-yellow-900/20 rounded-xl p-6 border border-orange-500/30">
+                  <h4 className="font-bold mb-4 flex items-center gap-2 text-lg">
+                    <Target className="text-orange-400" /> Force Result
+                  </h4>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                      <button key={n} onClick={() => forceGameResult("mines", `MINE_${n}`)} className="bg-zinc-700 hover:bg-orange-600 py-2 rounded-lg font-bold transition">
+                        {n} Mines
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Sky Aviator Control */}
+            {selectedGame === "sky" && (
+              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 space-y-6">
+                <h3 className="text-2xl font-bold flex items-center gap-2">
+                  <TrendUp className="text-cyan-400" /> Sky Aviator Control
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="text-zinc-500 text-sm">Min Bet</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">₹{currentGame.minBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter min bet:", currentGame.minBet.toString());
+                        if (val) updateGameSetting("sky", "minBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Max Bet</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">₹{currentGame.maxBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter max bet:", currentGame.maxBet.toString());
+                        if (val) updateGameSetting("sky", "maxBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Max Multiplier</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">{currentGame.maxMultiplier}x</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter max multiplier:", currentGame.maxMultiplier.toString());
+                        if (val) updateGameSetting("sky", "maxMultiplier", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Last Forced Result</label>
+                    <div className="mt-1 p-2 bg-black rounded-lg text-center">
+                      <span className="text-yellow-400">
+                        {currentGame.lastForcedResult?.result || "None"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* FORCE SKY RESULT */}
+                <div className="bg-linear-to-r from-cyan-900/20 to-blue-900/20 rounded-xl p-6 border border-cyan-500/30">
+                  <h4 className="font-bold mb-4 flex items-center gap-2 text-lg">
+                    <Target className="text-cyan-400" /> Force Crash
+                  </h4>
+                  <div className="grid grid-cols-4 gap-2 mb-4">
+                    {[1.5, 2, 3, 5, 10, 20, 50, 100].map(m => (
+                      <button key={m} onClick={() => forceGameResult("sky", `${m}x`)} className="bg-zinc-800 hover:bg-yellow-600 py-2 rounded-lg font-bold transition">{m}x</button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => forceGameResult("sky", "RANDOM")} className="bg-purple-600 hover:bg-purple-500 py-2 rounded-lg font-bold transition">🎲 RANDOM CRASH</button>
+                    <button onClick={() => forceGameResult("sky", "INSTANT")} className="bg-red-600 hover:bg-red-500 py-2 rounded-lg font-bold transition">💥 INSTANT CRASH</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Spin Wheel Control */}
+            {selectedGame === "spin" && (
+              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 space-y-6">
+                <h3 className="text-2xl font-bold flex items-center gap-2">
+                  <Heart className="text-indigo-400" /> Spin Wheel Control
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="text-zinc-500 text-sm">Min Bet</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">₹{currentGame.minBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter min bet:", currentGame.minBet.toString());
+                        if (val) updateGameSetting("spin", "minBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Max Bet</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">₹{currentGame.maxBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter max bet:", currentGame.maxBet.toString());
+                        if (val) updateGameSetting("spin", "maxBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Last Forced Result</label>
+                    <div className="mt-1 p-2 bg-black rounded-lg text-center">
+                      <span className="text-yellow-400">
+                        {currentGame.lastForcedResult?.result || "None"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-bold mb-3">Card Multipliers</h4>
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="bg-red-500/20 rounded-xl p-4 text-center">
+                      <p className="text-red-400 font-bold">♥ HEARTS</p>
+                      <div className="flex justify-center items-center gap-2 mt-2">
+                        <span className="text-2xl font-bold">{currentGame.heartsMultiplier}x</span>
+                        <button onClick={() => {
+                          const val = prompt("Enter HEARTS multiplier:", currentGame.heartsMultiplier.toString());
+                          if (val) updateGameSetting("spin", "heartsMultiplier", Number(val));
+                        }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                      </div>
+                    </div>
+                    <div className="bg-gray-500/20 rounded-xl p-4 text-center">
+                      <p className="text-gray-400 font-bold">♠ SPADES</p>
+                      <div className="flex justify-center items-center gap-2 mt-2">
+                        <span className="text-2xl font-bold">{currentGame.spadesMultiplier}x</span>
+                        <button onClick={() => {
+                          const val = prompt("Enter SPADES multiplier:", currentGame.spadesMultiplier.toString());
+                          if (val) updateGameSetting("spin", "spadesMultiplier", Number(val));
+                        }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                      </div>
+                    </div>
+                    <div className="bg-green-500/20 rounded-xl p-4 text-center">
+                      <p className="text-green-400 font-bold">♣ CLUBS</p>
+                      <div className="flex justify-center items-center gap-2 mt-2">
+                        <span className="text-2xl font-bold">{currentGame.clubsMultiplier}x</span>
+                        <button onClick={() => {
+                          const val = prompt("Enter CLUBS multiplier:", currentGame.clubsMultiplier.toString());
+                          if (val) updateGameSetting("spin", "clubsMultiplier", Number(val));
+                        }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                      </div>
+                    </div>
+                    <div className="bg-blue-500/20 rounded-xl p-4 text-center">
+                      <p className="text-blue-400 font-bold">♦ DIAMONDS</p>
+                      <div className="flex justify-center items-center gap-2 mt-2">
+                        <span className="text-2xl font-bold">{currentGame.diamondsMultiplier}x</span>
+                        <button onClick={() => {
+                          const val = prompt("Enter DIAMONDS multiplier:", currentGame.diamondsMultiplier.toString());
+                          if (val) updateGameSetting("spin", "diamondsMultiplier", Number(val));
+                        }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* FORCE CARD */}
+                <div className="bg-linear-to-r from-indigo-900/20 to-purple-900/20 rounded-xl p-6 border border-indigo-500/30">
+                  <h4 className="font-bold mb-4 flex items-center gap-2 text-lg">
+                    <Target className="text-indigo-400" /> Force Card
+                  </h4>
+                  <div className="grid grid-cols-4 gap-2">
+                    {["HEARTS", "SPADES", "CLUBS", "DIAMONDS"].map(card => (
+                      <button key={card} onClick={() => forceGameResult("spin", card)} className="bg-zinc-800 hover:bg-green-600 py-2 rounded-lg font-bold transition">
+                        {card === "HEARTS" && "♥"} {card === "SPADES" && "♠"} {card === "CLUBS" && "♣"} {card === "DIAMONDS" && "♦"} {card}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Plinko Control */}
+            {selectedGame === "plinko" && (
+              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 space-y-6">
+                <h3 className="text-2xl font-bold flex items-center gap-2">
+                  <Zap className="text-emerald-400" /> Plinko Control
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-zinc-500 text-sm">Min Bet</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">₹{currentGame.minBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter min bet:", currentGame.minBet.toString());
+                        if (val) updateGameSetting("plinko", "minBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Max Bet</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">₹{currentGame.maxBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter max bet:", currentGame.maxBet.toString());
+                        if (val) updateGameSetting("plinko", "maxBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Last Forced Result</label>
+                    <div className="mt-1 p-2 bg-black rounded-lg text-center">
+                      <span className="text-yellow-400">
+                        {currentGame.lastForcedResult?.result || "None"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-bold mb-3">Risk Level Multipliers</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-green-500/20 rounded-xl p-4 text-center">
+                      <p className="text-green-400 font-bold">🟢 LOW RISK</p>
+                      <div className="flex flex-wrap justify-center gap-1 mt-2">
+                        {currentGame.multipliers?.LOW.map((m: number, i: number) => (
+                          <span key={i} className="text-sm font-bold">{m}x</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-yellow-500/20 rounded-xl p-4 text-center">
+                      <p className="text-yellow-400 font-bold">🟡 MEDIUM RISK</p>
+                      <div className="flex flex-wrap justify-center gap-1 mt-2">
+                        {currentGame.multipliers?.MEDIUM.map((m: number, i: number) => (
+                          <span key={i} className="text-sm font-bold">{m}x</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-red-500/20 rounded-xl p-4 text-center">
+                      <p className="text-red-400 font-bold">🔴 HIGH RISK</p>
+                      <div className="flex flex-wrap justify-center gap-1 mt-2">
+                        {currentGame.multipliers?.HIGH.map((m: number, i: number) => (
+                          <span key={i} className="text-sm font-bold">{m}x</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* FORCE PLINKO RESULT */}
+                <div className="bg-linear-to-r from-emerald-900/20 to-green-900/20 rounded-xl p-6 border border-emerald-500/30">
+                  <h4 className="font-bold mb-4 flex items-center gap-2 text-lg">
+                    <Target className="text-emerald-400" /> Force Multiplier
+                  </h4>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[0.2, 0.5, 1, 2, 3, 5, 8, 10].map(m => (
+                      <button key={m} onClick={() => forceGameResult("plinko", `${m}x`)} className="bg-zinc-800 hover:bg-green-600 py-2 rounded-lg font-bold transition">{m}x</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Trading Control */}
+            {selectedGame === "trading" && (
+              <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 space-y-6">
+                <h3 className="text-2xl font-bold flex items-center gap-2">
+                  <CandlestickChart className="text-blue-400" /> Trading Control
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-zinc-500 text-sm">Min Bet</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">₹{currentGame.minBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter min bet:", currentGame.minBet.toString());
+                        if (val) updateGameSetting("trading", "minBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Max Bet</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xl font-bold">₹{currentGame.maxBet}</span>
+                      <button onClick={() => {
+                        const val = prompt("Enter max bet:", currentGame.maxBet.toString());
+                        if (val) updateGameSetting("trading", "maxBet", Number(val));
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-zinc-500 text-sm">Last Forced Result</label>
+                    <div className="mt-1 p-2 bg-black rounded-lg text-center">
+                      <span className="text-yellow-400">
+                        {currentGame.lastForcedResult?.result || "None"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-bold mb-3">Win/Loss Probability</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-black rounded-xl p-4 text-center">
+                      <p className="text-green-400 font-bold">Win Chance</p>
+                      <div className="flex justify-center items-center gap-2 mt-2">
+                        <span className="text-3xl font-bold">{currentGame.winProbability}%</span>
+                        <button onClick={() => {
+                          const val = prompt("Enter win probability (0-100):", currentGame.winProbability.toString());
+                          if (val) {
+                            updateGameSetting("trading", "winProbability", Number(val));
+                            updateGameSetting("trading", "lossProbability", 100 - Number(val));
+                          }
+                        }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={14} /></button>
+                      </div>
+                    </div>
+                    <div className="bg-black rounded-xl p-4 text-center">
+                      <p className="text-red-400 font-bold">Loss Chance</p>
+                      <span className="text-3xl font-bold">{currentGame.lossProbability}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* FORCE TRADING DIRECTION */}
+                <div className="bg-linear-to-r from-blue-900/20 to-purple-900/20 rounded-xl p-6 border border-blue-500/30">
+                  <h4 className="font-bold mb-4 flex items-center gap-2 text-lg">
+                    <Target className="text-blue-400" /> Force Chart Direction
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button onClick={() => forceGameResult("trading", "UP")} className="bg-green-600 hover:bg-green-500 py-3 rounded-lg font-bold transition flex items-center justify-center gap-2">
+                      <TrendUp size={18} /> FORCE UP
+                    </button>
+                    <button onClick={() => forceGameResult("trading", "DOWN")} className="bg-red-600 hover:bg-red-500 py-3 rounded-lg font-bold transition flex items-center justify-center gap-2">
+                      <TrendDown size={18} /> FORCE DOWN
+                    </button>
+                    <button onClick={() => forceGameResult("trading", "RANDOM")} className="bg-purple-600 hover:bg-purple-500 py-3 rounded-lg font-bold transition">🎲 RANDOM</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -872,85 +1441,26 @@ export default function AdminPage() {
             <h2 className="text-3xl font-black mb-6">Platform Settings</h2>
             <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800">
               <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <label className="text-zinc-500 text-sm">Site Name</label>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-lg font-bold">{platformSettings.siteName}</span>
-                    <button onClick={() => {
-                      const val = prompt("Enter site name:", platformSettings.siteName);
-                      if (val) updatePlatformSetting("siteName", val);
-                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                {Object.entries(platformSettings).map(([key, value]) => (
+                  <div key={key}>
+                    <label className="text-zinc-500 text-sm capitalize">{key.replace(/([A-Z])/g, ' $1')}</label>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-lg font-bold">
+                        {typeof value === "boolean" ? (value ? "ON" : "OFF") : 
+                         typeof value === "number" ? (key.includes("Deposit") || key.includes("Withdraw") ? `₹${value}` : `${value}%`) : 
+                         value}
+                      </span>
+                      <button onClick={() => {
+                        const val = prompt(`Enter new value for ${key}:`, String(value));
+                        if (val) {
+                          if (typeof value === "boolean") updatePlatformSetting(key, val.toLowerCase() === "true");
+                          else if (typeof value === "number") updatePlatformSetting(key, Number(val));
+                          else updatePlatformSetting(key, val);
+                        }
+                      }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="text-zinc-500 text-sm">Maintenance Mode</label>
-                  <div className="mt-2">
-                    <button onClick={() => updatePlatformSetting("maintenance", !platformSettings.maintenance)} 
-                      className={`px-4 py-2 rounded-xl text-sm font-bold ${platformSettings.maintenance ? "bg-red-500 text-white" : "bg-green-500 text-black"}`}>
-                      {platformSettings.maintenance ? "Maintenance ON" : "Maintenance OFF"}
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-zinc-500 text-sm">Deposit Bonus (%)</label>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-lg font-bold">{platformSettings.depositBonus}%</span>
-                    <button onClick={() => {
-                      const val = prompt("Enter deposit bonus:", platformSettings.depositBonus.toString());
-                      if (val) updatePlatformSetting("depositBonus", Number(val));
-                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-zinc-500 text-sm">Referral Bonus (%)</label>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-lg font-bold">{platformSettings.referralBonus}%</span>
-                    <button onClick={() => {
-                      const val = prompt("Enter referral bonus:", platformSettings.referralBonus.toString());
-                      if (val) updatePlatformSetting("referralBonus", Number(val));
-                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-zinc-500 text-sm">Min Deposit (₹)</label>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-lg font-bold">₹{platformSettings.minDeposit}</span>
-                    <button onClick={() => {
-                      const val = prompt("Enter min deposit:", platformSettings.minDeposit.toString());
-                      if (val) updatePlatformSetting("minDeposit", Number(val));
-                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-zinc-500 text-sm">Max Deposit (₹)</label>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-lg font-bold">₹{platformSettings.maxDeposit}</span>
-                    <button onClick={() => {
-                      const val = prompt("Enter max deposit:", platformSettings.maxDeposit.toString());
-                      if (val) updatePlatformSetting("maxDeposit", Number(val));
-                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-zinc-500 text-sm">Min Withdraw (₹)</label>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-lg font-bold">₹{platformSettings.minWithdraw}</span>
-                    <button onClick={() => {
-                      const val = prompt("Enter min withdraw:", platformSettings.minWithdraw.toString());
-                      if (val) updatePlatformSetting("minWithdraw", Number(val));
-                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-zinc-500 text-sm">Max Withdraw (₹)</label>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-lg font-bold">₹{platformSettings.maxWithdraw}</span>
-                    <button onClick={() => {
-                      const val = prompt("Enter max withdraw:", platformSettings.maxWithdraw.toString());
-                      if (val) updatePlatformSetting("maxWithdraw", Number(val));
-                    }} className="p-1 hover:bg-zinc-800 rounded"><Edit2 size={16} /></button>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>

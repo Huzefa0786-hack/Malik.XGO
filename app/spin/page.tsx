@@ -26,6 +26,26 @@ export default function SpinningWheelPage() {
   const cards = ["hearts", "spades", "clubs", "diamonds"];
   const cardSymbols: Record<string, string> = { hearts: "♥", spades: "♠", clubs: "♣", diamonds: "♦" };
 
+  // Add this useEffect to each game page
+useEffect(() => {
+  const checkForcedResult = () => {
+    const gameName = "colorTrade"; // Change for each game
+    const forced = localStorage.getItem(`forced_${gameName}_result`);
+    const timestamp = localStorage.getItem("forced_result_timestamp");
+    
+    if (forced && timestamp && (Date.now() - parseInt(timestamp) < 5000)) {
+      // Apply forced result
+      setResult(forced);
+      // Handle the result based on game type
+      localStorage.removeItem(`forced_${gameName}_result`);
+    }
+  };
+  
+  checkForcedResult();
+  const interval = setInterval(checkForcedResult, 1000);
+  return () => clearInterval(interval);
+}, []);
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     const userData = localStorage.getItem("user");

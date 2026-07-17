@@ -9,7 +9,7 @@ const verifyToken = (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "No token provided" });
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret123");
     req.userId = decoded.id;
     next();
   } catch (err) {
@@ -30,7 +30,6 @@ router.post("/place", verifyToken, async (req, res) => {
     if (!user) return res.status(404).json({ error: "User not found" });
     if (user.wallet < amount) return res.status(400).json({ error: "Insufficient balance" });
     
-    // Deduct bet amount
     user.wallet -= amount;
     await user.save();
     
@@ -61,7 +60,7 @@ router.post("/place", verifyToken, async (req, res) => {
   }
 });
 
-// Cashout / Win
+// Cashout
 router.post("/cashout", verifyToken, async (req, res) => {
   try {
     const { betId, winAmount, result, multiplier } = req.body;
@@ -69,13 +68,11 @@ router.post("/cashout", verifyToken, async (req, res) => {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
     
-    // Add win amount to wallet
     if (winAmount > 0) {
       user.wallet += winAmount;
       await user.save();
     }
     
-    // Update bet record
     if (betId) {
       await Bet.findByIdAndUpdate(betId, {
         isWin: winAmount > 0,
@@ -89,8 +86,7 @@ router.post("/cashout", verifyToken, async (req, res) => {
     res.json({ 
       success: true, 
       wallet: user.wallet,
-      winAmount: winAmount,
-      message: winAmount > 0 ? `You won ₹${winAmount}!` : "Better luck next time"
+      winAmount: winAmount
     });
   } catch (err) {
     console.error("Cashout error:", err);
@@ -98,48 +94,29 @@ router.post("/cashout", verifyToken, async (req, res) => {
   }
 });
 
-// Get bet history for user
+// Get bet history
 router.get("/history", verifyToken, async (req, res) => {
   try {
-    const { game, limit = 50, page = 1 } = req.query;
+    const { game, limit = 50 } = req.query;
     const query = { userId: req.userId };
     if (game && game !== "all") query.game = game;
     
     const bets = await Bet.find(query)
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit));
+      .limit(parseInt(limit));
     
-    const total = await Bet.countDocuments(query);
-    
-    // Calculate statistics
-    const stats = await Bet.aggregate([
-      { $match: { userId: req.userId, status: "completed" } },
-      { $group: {
-        _id: null,
-        totalBets: { $sum: 1 },
-        totalWins: { $sum: { $cond: ["$isWin", 1, 0] } },
-        totalLosses: { $sum: { $cond: ["$isWin", 0, 1] } },
-        totalWonAmount: { $sum: "$winAmount" },
-        totalBetAmount: { $sum: "$amount" }
-      }}
-    ]);
+    const stats = {
+      totalBets: bets.length,
+      totalWins: bets.filter(b => b.isWin).length,
+      totalLosses: bets.filter(b => !b.isWin).length,
+      totalWonAmount: bets.reduce((sum, b) => sum + (b.winAmount || 0), 0),
+      totalBetAmount: bets.reduce((sum, b) => sum + b.amount, 0)
+    };
     
     res.json({
       success: true,
       bets,
-      stats: stats[0] || {
-        totalBets: 0,
-        totalWins: 0,
-        totalLosses: 0,
-        totalWonAmount: 0,
-        totalBetAmount: 0
-      },
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / parseInt(limit)),
-        total
-      }
+      stats
     });
   } catch (err) {
     console.error("History error:", err);
@@ -147,18 +124,11 @@ router.get("/history", verifyToken, async (req, res) => {
   }
 });
 
-// Get game results (for admin/display)
-router.get("/results/:game", async (req, res) => {
+// Get wallet balance
+router.get("/balance", verifyToken, async (req, res) => {
   try {
-    const { game } = req.params;
-    const { limit = 20 } = req.query;
-    
-    const results = await Bet.find({ game, status: "completed", isWin: true })
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .select("userName winAmount selection createdAt");
-    
-    res.json({ success: true, results });
+    const user = await User.findById(req.userId);
+    res.json({ success: true, balance: user?.wallet || 0 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
