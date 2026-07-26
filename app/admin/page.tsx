@@ -99,6 +99,14 @@ export default function AdminPage() {
       lastForcedResult: null,
       forcedResult: null
     },
+    coinFlip: {
+  enabled: true,
+  minBet: 10,
+  maxBet: 10000,
+  multiplier: 1.9,
+  lastForcedResult: null,
+  forcedResult: null
+    },
     mines: {
       enabled: true,
       minBet: 10,
@@ -236,10 +244,10 @@ export default function AdminPage() {
         const deposits = data.transactions?.filter((t: TransactionType) => t.type === "deposit") || [];
         const withdrawals = data.transactions?.filter((t: TransactionType) => t.type === "withdraw") || [];
         setTransactionStats({
-          totalDeposits: deposits.reduce((sum, t) => sum + t.amount, 0),
-          totalWithdrawals: withdrawals.reduce((sum, t) => sum + t.amount, 0),
-          pendingDeposits: deposits.filter(t => t.status === "pending").length,
-          pendingWithdrawals: withdrawals.filter(t => t.status === "pending").length,
+          totalDeposits: deposits.reduce((sum: any, t: { amount: any; }) => sum + t.amount, 0),
+          totalWithdrawals: withdrawals.reduce((sum: any, t: { amount: any; }) => sum + t.amount, 0),
+          pendingDeposits: deposits.filter((t: { status: string; }) => t.status === "pending").length,
+          pendingWithdrawals: withdrawals.filter((t: { status: string; }) => t.status === "pending").length,
           totalCompleted: data.transactions?.filter((t: TransactionType) => t.status === "completed").length || 0,
           totalRejected: data.transactions?.filter((t: TransactionType) => t.status === "rejected").length || 0
         });

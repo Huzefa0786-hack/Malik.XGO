@@ -417,6 +417,29 @@ useEffect(() => {
     </div>
   </div>
 </Link>
+{/* Coin Flip */}
+<Link href="/the-coin">
+  <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden hover:border-green-500 transition-all cursor-pointer group">
+    <div className="h-40 bg-linear-to-r from-yellow-500 to-yellow-700 flex items-center justify-center">
+      <div className="relative">
+        <span className="text-7xl">🪙</span>
+        <div className="absolute -top-2 -right-2 bg-green-500 text-black text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">NEW</div>
+      </div>
+    </div>
+    <div className="p-6">
+      <h3 className="text-3xl font-black mb-2">Coin Flip</h3>
+      <p className="text-zinc-400 mb-4">Flip a coin and win 1.9x your bet! Simple & exciting.</p>
+      <div className="flex gap-2 mb-4">
+        <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-lg text-xs">Heads/Tails</span>
+        <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded-lg text-xs">1.9x</span>
+        <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded-lg text-xs">Instant</span>
+      </div>
+      <button className="w-full bg-green-500 text-black font-black py-3 rounded-xl hover:bg-green-600 transition">
+        FLIP COIN
+      </button>
+    </div>
+  </div>
+</Link>
             {/* SPIN */}
             <Link href="/spin">
               <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden hover:border-green-500 transition-all cursor-pointer group">
